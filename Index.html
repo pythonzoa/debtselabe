@@ -1,0 +1,2035 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>항공기 차입금 분석 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&display=swap');
+
+        :root {
+            --bg-primary: #0f172a;
+            --bg-card: #1e293b;
+            --border: #334155;
+            --accent-blue: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: var(--bg-primary);
+            color: #f1f5f9;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .layout-container {
+            display: grid;
+            grid-template-columns: 1fr 220px;
+            height: 100vh;
+        }
+
+        .main-area {
+            padding: 24px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        .sidebar {
+            background: #0f172a;
+            border-left: 1px solid var(--border);
+            padding: 16px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        /* Drag & Drop Styles */
+        .col-chip {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #94a3b8;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .col-chip:hover {
+            border-color: var(--accent-blue);
+            color: white;
+            background: #334155;
+        }
+
+        .drop-zone {
+            min-height: 80px;
+            background: rgba(30, 41, 59, 0.4);
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 16px;
+            transition: all 0.3s;
+            align-items: flex-start;
+        }
+
+        .drop-zone.drag-over {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent-blue);
+        }
+
+        .filter-widget {
+            background: #1e293b;
+            border: 1px solid var(--accent-blue);
+            border-radius: 10px;
+            padding: 8px 12px;
+            min-width: 160px;
+            position: relative;
+            cursor: grab;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .filter-widget label {
+            font-size: 10px;
+            color: var(--accent-blue);
+            font-weight: 700;
+            display: block;
+            margin-bottom: 4px;
+            pointer-events: none;
+        }
+
+        .filter-widget select {
+            width: 100%;
+            background: transparent;
+            color: white;
+            font-size: 12px;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 4px;
+            appearance: none;
+        }
+
+        .filter-widget select option {
+            background: #1e293b;
+            color: white;
+        }
+
+        .filter-widget .remove-btn {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 18px;
+            height: 18px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border: none;
+        }
+
+        .filter-widget:hover .remove-btn {
+            opacity: 1;
+        }
+
+        /* Step Tabs */
+        .step-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: #1e293b;
+            padding: 4px;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .step-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .step-btn.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .step-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Admin Only Elements */
+        .admin-only {
+            display: none !important;
+        }
+
+        .visible-admin {
+            display: inline-flex !important;
+        }
+
+        /* Cards & Tables */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .data-table {
+            width: 100%;
+            font-size: 14px;
+            text-align: left;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: #0f172a;
+            padding: 12px;
+            color: #94a3b8;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            color: #cbd5e1;
+            text-align: center;
+        }
+
+        .data-table td.text-right {
+            text-align: right;
+        }
+
+        .data-table tbody tr:hover {
+            background: rgba(59, 130, 246, 0.1);
+            cursor: pointer;
+        }
+
+        .data-table tbody tr.selected {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .kpi-value {
+            font-weight: 700;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .toast.error {
+            background: #dc2626;
+            color: white;
+        }
+
+        .toast.success {
+            background: #16a34a;
+            color: white;
+        }
+
+        .toast.warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            backdrop-filter: blur(4px);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .layout-container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: none;
+            }
+
+            .data-table {
+                font-size: 12px;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 8px 4px;
+            }
+        }
+
+        /* Filter Preset Styles */
+        .preset-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: #1e293b;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preset-item:hover {
+            background: #334155;
+            border-color: var(--accent-blue);
+        }
+
+        .preset-item button {
+            opacity: 0;
+            transition: opacity 0.2s;
+            background: #ef4444;
+            border: none;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+        }
+
+        .preset-item:hover button {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="layout-container">
+
+        <!-- MAIN CONTENT -->
+        <div class="main-area">
+            <header class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30 text-white text-xl">
+                        <i class="fas fa-plane-departure"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-white tracking-tight">항공기 금융 통합 분석</h1>
+                        <p class="text-[10px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
+                            <span id="userBadge"
+                                class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">Connecting...</span>
+                            <span id="dataSourceBadge" class="hidden bg-slate-800 px-2 py-0.5 rounded border border-slate-700"></span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button onclick="AppController.exportToCSV()" id="exportBtn"
+                        class="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white border border-emerald-700 hover:bg-emerald-500 transition-all flex items-center gap-2">
+                        <i class="fas fa-download"></i> <span class="hidden md:inline">CSV 내보내기</span>
+                    </button>
+                    <button onclick="AppController.fetchData(true)" id="refreshBtn"
+                        class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all flex items-center gap-2">
+                        <i class="fas fa-sync-alt"></i> <span class="hidden md:inline">새로고침</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- STEP NAVIGATION -->
+            <div class="step-tabs" role="tablist" aria-label="단계 네비게이션">
+                <button class="step-btn admin-only" onclick="AppController.goStep(0)" id="btn-step-0" role="tab"
+                    aria-selected="false">1. 데이터 동기화</button>
+                <button class="step-btn admin-only" onclick="AppController.goStep(1)" id="btn-step-1" role="tab"
+                    aria-selected="false" disabled>2. 무결성 검증</button>
+                <button class="step-btn" onclick="AppController.goStep(2)" id="btn-step-2" role="tab"
+                    aria-selected="true">분석 대시보드</button>
+                <button class="step-btn" onclick="AppController.goStep(3)" id="btn-step-3" role="tab"
+                    aria-selected="false">시계열 분석</button>
+            </div>
+
+            <!-- VIEW 0: Sync (Admin Only) -->
+            <div id="step-0" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-0">
+                <div
+                    class="card p-10 flex flex-col items-center justify-center text-center border-dashed border-2 border-slate-700 bg-slate-800/20">
+                    <h2 class="text-xl font-bold text-slate-200 mb-2">관리자 데이터 동기화</h2>
+                    <p class="text-sm text-slate-500 mb-6">Google Sheets의 최신 데이터를 불러옵니다.</p>
+                    <button onclick="AppController.fetchData()" id="syncBtn"
+                        class="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-lg">
+                        데이터 불러오기
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW 1: Validation (Admin Only) -->
+            <div id="step-1" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-1">
+                <div class="card p-6 mb-6 border-l-4 border-l-cyan-500 flex justify-between items-center">
+                    <div>
+                        <h3 class="font-bold text-lg text-white">데이터 검증 결과</h3>
+                        <p class="text-xs text-slate-400 mt-1">결산 전 데이터 이상 유무를 확인하세요.</p>
+                    </div>
+                    <button onclick="AppController.goStep(2)"
+                        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold">분석
+                        화면으로 이동</button>
+                </div>
+                <div id="validationResult" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+
+            <!-- VIEW 2: Dashboard (Main) -->
+            <div id="step-2" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-2">
+
+                <!-- Filter Presets -->
+                <div class="mb-4 flex justify-between items-center">
+                    <div class="flex gap-2 items-center">
+                        <button onclick="FilterPresets.showSaveDialog()"
+                            class="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all flex items-center gap-1">
+                            <i class="fas fa-save"></i> 필터 저장
+                        </button>
+                        <div class="relative">
+                            <button onclick="FilterPresets.toggleList()" id="presetToggle"
+                                class="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all flex items-center gap-1">
+                                <i class="fas fa-star"></i> 저장된 필터 (<span id="presetCount">0</span>)
+                            </button>
+                            <div id="presetList"
+                                class="hidden absolute top-full left-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg p-2 min-w-[200px] max-h-[300px] overflow-y-auto z-10 shadow-xl">
+                                <p class="text-xs text-slate-500 text-center py-4">저장된 필터가 없습니다</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drop Zone (Filters) -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-end mb-2">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-filter text-blue-400"></i> 사용자 정의 필터
+                        </h3>
+                        <button onclick="FilterManager.reset()"
+                            class="text-xs text-slate-500 hover:text-white transition-colors flex items-center gap-1">
+                            <i class="fas fa-undo"></i> 초기화
+                        </button>
+                    </div>
+                    <div id="activeFilters" class="drop-zone" role="region" aria-label="활성 필터 영역">
+                        <div class="text-slate-500 text-sm italic w-full text-center pointer-events-none mt-4 select-none"
+                            id="emptyMsg">
+                            우측 목록에서 필터 항목을 드래그하세요
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="kpiArea" role="region"
+                    aria-label="주요 지표"></div>
+
+                <!-- Charts Area -->
+                <div id="chartArea" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="card p-5 bg-slate-800/50 border border-slate-700">
+                        <h4 class="text-base font-bold text-slate-300 mb-1">금융기관별 익스포저 (Top 7)</h4>
+                        <p class="text-xs text-slate-500 mb-3">원화 환산 기준</p>
+                        <div class="h-64 relative"><canvas id="chartLender" aria-label="금융기관별 익스포저 차트"></canvas>
+                        </div>
+                    </div>
+                    <div class="card p-5 bg-slate-800/50 border border-slate-700">
+                        <h4 class="text-base font-bold text-slate-300 mb-1">통화별 포트폴리오</h4>
+                        <p class="text-xs text-slate-500 mb-3">원화 환산 기준</p>
+                        <div class="h-64 relative flex items-center">
+                            <div class="w-1/2 h-full flex items-center justify-center">
+                                <canvas id="chartCurrency" aria-label="통화별 포트폴리오 차트"></canvas>
+                            </div>
+                            <div id="currencyLegend" class="w-1/2 pl-2 flex flex-col justify-center gap-2"></div>
+                        </div>
+                    </div>
+                    <div class="card p-5 bg-slate-800/50 border border-slate-700">
+                        <h4 class="text-base font-bold text-slate-300 mb-1">연도별 만기 구조</h4>
+                        <p class="text-xs text-slate-500 mb-3">원화 환산 기준</p>
+                        <div class="h-64 relative"><canvas id="chartMaturity" aria-label="연도별 만기 구조 차트"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detail Card -->
+                <div id="detailCard"
+                    class="hidden card p-0 overflow-hidden mb-6 border-l-4 border-l-blue-500 shadow-lg shadow-blue-900/20 transition-all duration-300"
+                    role="region" aria-label="선택된 항목 상세 정보">
+                    <div class="p-6 bg-slate-800/50 border-b border-slate-700 flex justify-between items-start">
+                        <div>
+                            <span
+                                class="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30 mb-2 inline-block"
+                                id="dc-deal">-</span>
+                            <h2 class="text-2xl font-bold text-white tracking-tight" id="dc-remark">-</h2>
+                            <p class="text-sm text-slate-400 mt-1"><span id="dc-lender">-</span> · <span
+                                    id="dc-fundUse">-</span></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">잔액</p>
+                            <p class="text-3xl font-bold text-white kpi-value" id="dc-balance">0</p>
+                            <p class="text-xs text-slate-400 mt-1">KRW</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-4 divide-x divide-slate-700">
+                        <div class="p-4 text-center">
+                            <p class="text-xs text-slate-500 uppercase font-bold mb-1">통화</p>
+                            <p class="text-base font-bold text-slate-200" id="dc-currency">-</p>
+                        </div>
+                        <div class="p-4 text-center">
+                            <p class="text-xs text-slate-500 uppercase font-bold mb-1">유형</p>
+                            <p class="text-base font-bold text-slate-200" id="dc-type">-</p>
+                        </div>
+                        <div class="p-4 text-center">
+                            <p class="text-xs text-slate-500 uppercase font-bold mb-1">금리</p>
+                            <p class="text-base font-bold text-emerald-400 kpi-value" id="dc-rate">-</p>
+                        </div>
+                        <div class="p-4 text-center">
+                            <p class="text-xs text-slate-500 uppercase font-bold mb-1">만기</p>
+                            <p class="text-base font-bold text-amber-400 kpi-value" id="dc-maturity">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABLE -->
+                <div class="card h-[500px] flex flex-col">
+                    <div
+                        class="p-4 border-b border-slate-700 bg-slate-800/30 flex justify-between items-center shrink-0">
+                        <h4 class="font-bold text-slate-300 text-sm">데이터 리스트 <span
+                                class="text-xs font-normal text-slate-500 ml-1" id="rowCount"></span></h4>
+                    </div>
+                    <div class="overflow-auto flex-grow custom-scroll">
+                        <table class="data-table relative" role="grid" aria-label="차입금 데이터 목록">
+                            <thead id="tableHead" class="sticky top-0 z-10"></thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: Time Series Analysis -->
+            <div id="step-3" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-3">
+                <div class="card p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-white">차입금 시계열 분석</h3>
+                            <p class="text-xs text-slate-400 mt-1">월별 차입금 잔액 추이를 확인합니다.</p>
+                        </div>
+                        <button onclick="HistoryController.loadData()" id="loadHistoryBtn"
+                            class="px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all flex items-center gap-2">
+                            <i class="fas fa-chart-line"></i> 데이터 불러오기
+                        </button>
+                    </div>
+
+                    <!-- Filter -->
+                    <div class="flex gap-4 mb-6">
+                        <div class="flex-1">
+                            <label class="text-xs text-slate-400 block mb-1">차입처 선택</label>
+                            <select id="historyLenderFilter" onchange="HistoryController.updateChart()"
+                                class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="text-xs text-slate-400 block mb-1">통화 선택</label>
+                            <select id="historyCurrencyFilter" onchange="HistoryController.updateChart()"
+                                class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Chart -->
+                    <div class="h-96 relative">
+                        <canvas id="chartHistory" aria-label="차입금 시계열 차트"></canvas>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="card h-[400px] flex flex-col">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800/30 flex justify-between items-center shrink-0">
+                        <h4 class="font-bold text-slate-300 text-sm">월별 데이터 <span
+                                class="text-xs font-normal text-slate-500 ml-1" id="historyRowCount"></span></h4>
+                    </div>
+                    <div class="overflow-auto flex-grow">
+                        <table class="data-table relative">
+                            <thead id="historyTableHead" class="sticky top-0 z-10"></thead>
+                            <tbody id="historyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="sidebar flex flex-col">
+            <h3
+                class="text-xs font-bold text-slate-400 mb-4 uppercase tracking-wider border-b border-slate-700 pb-3 flex justify-between items-center">
+                <span>필터 소스</span>
+                <span class="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-500" id="colCount">0</span>
+            </h3>
+            <div id="filterSource" class="flex flex-col gap-2 overflow-y-auto pr-1 flex-grow" role="list"
+                aria-label="사용 가능한 필터 목록"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // ┌──────────────────────────────────────────────────┐
+        // │  유틸리티 함수                                    │
+        // └──────────────────────────────────────────────────┘
+
+        const Utils = {
+            /**
+             * XSS 방지를 위한 HTML 이스케이프
+             */
+            escapeHtml(text) {
+                if (text === null || text === undefined) return '';
+                const div = document.createElement('div');
+                div.textContent = String(text);
+                return div.innerHTML;
+            },
+
+            /**
+             * 안전한 DOM 요소 생성
+             */
+            createElement(tag, attributes = {}, children = []) {
+                const element = document.createElement(tag);
+
+                Object.entries(attributes).forEach(([key, value]) => {
+                    if (key === 'className') {
+                        element.className = value;
+                    } else if (key === 'textContent') {
+                        element.textContent = value;
+                    } else if (key.startsWith('on')) {
+                        // 이벤트 리스너는 속성이 아닌 addEventListener로 추가
+                        element.addEventListener(key.substring(2).toLowerCase(), value);
+                    } else {
+                        element.setAttribute(key, value);
+                    }
+                });
+
+                children.forEach(child => {
+                    if (typeof child === 'string') {
+                        element.appendChild(document.createTextNode(child));
+                    } else {
+                        element.appendChild(child);
+                    }
+                });
+
+                return element;
+            },
+
+            /**
+             * 숫자 포맷팅
+             */
+            formatNumber(value, decimals = 0) {
+                const num = Number(value);
+                if (isNaN(num)) return '-';
+                return num.toLocaleString(undefined, {
+                    minimumFractionDigits: decimals,
+                    maximumFractionDigits: decimals
+                });
+            },
+
+            /**
+             * 디바운스 함수
+             */
+            debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            },
+
+            /**
+             * 토스트 알림
+             */
+            showToast(message, type = 'error') {
+                const existing = document.querySelector('.toast');
+                if (existing) existing.remove();
+
+                const toast = Utils.createElement('div', {
+                    className: `toast ${type}`,
+                    textContent: message
+                });
+
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 4000);
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  로딩 매니저                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const LoadingManager = {
+            show(message = '로딩 중...') {
+                const existing = document.getElementById('loading-overlay');
+                if (existing) return;
+
+                const overlay = Utils.createElement('div', {
+                    id: 'loading-overlay',
+                    className: 'fixed inset-0 bg-black/50 flex items-center justify-center z-50'
+                });
+
+                overlay.innerHTML = `
+                    <div class="bg-slate-800 p-6 rounded-xl shadow-2xl flex flex-col items-center gap-4">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                        <p class="text-white font-medium">${Utils.escapeHtml(message)}</p>
+                    </div>
+                `;
+
+                document.body.appendChild(overlay);
+            },
+
+            hide() {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) overlay.remove();
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  에러 핸들러                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const ErrorHandler = {
+            handle(error, context = '') {
+                console.error(`[${context}]`, error);
+
+                const userMessage = this.getUserMessage(error);
+                Utils.showToast(userMessage, 'error');
+
+                this.logError(error, context);
+            },
+
+            getUserMessage(error) {
+                if (error.code === 'SHEET_NOT_FOUND') {
+                    return '데이터 시트를 찾을 수 없습니다. 관리자에게 문의하세요.';
+                }
+                if (error.code === 'PERMISSION_DENIED') {
+                    return '권한이 없습니다.';
+                }
+                if (error.message) {
+                    return error.message;
+                }
+                return '오류가 발생했습니다. 다시 시도해주세요.';
+            },
+
+            logError(error, context) {
+                // 실제 환경에서는 Google Analytics 등으로 전송
+                console.log('Error logged:', { error, context, timestamp: new Date().toISOString() });
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  데이터 서비스                                    │
+        // └──────────────────────────────────────────────────┘
+
+        const DataService = {
+            async fetchData(startRow = 0, maxRows = 1000) {
+                return new Promise((resolve, reject) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getData(startRow, maxRows);
+                    } else {
+                        // 로컬 테스트용 목 데이터
+                        setTimeout(() => {
+                            const mock = {
+                                columns: ['DEAL', '차입처', '차입형태', '자금용도', '통화', '금리유형', '원화환산잔액', '당월잔액', '적용율', 'FROM', 'TO'],
+                                data: [
+                                    { DEAL: 'HL8285', 차입처: 'JP Morgan', 차입형태: '금융리스', 자금용도: '항공기', 통화: 'USD', 금리유형: '변동', 원화환산잔액: 5153599084, 당월잔액: 3850000, 적용율: 0.0421, FROM: '2016-05-20', TO: '2026-05-20' },
+                                    { DEAL: 'HL7623', 차입처: 'TD Bank', 차입형태: '금융리스', 자금용도: '항공기', 통화: 'USD', 금리유형: '고정', 원화환산잔액: 6136657714, 당월잔액: 4580000, 적용율: 0.0332, FROM: '2017-11-15', TO: '2027-11-15' },
+                                    { DEAL: 'BOND102', 차입처: '산업은행', 차입형태: '일반차입', 자금용도: '시설자금', 통화: 'KRW', 금리유형: '고정', 원화환산잔액: 80000000000, 당월잔액: 80000000000, 적용율: 0.0507, FROM: '2021-02-15', TO: '2026-02-15' },
+                                ],
+                                allowedFilters: [],
+                                hasMore: false,
+                                validation: { errors: [], warnings: [], isValid: true }
+                            };
+                            resolve(mock);
+                        }, 1000);
+                    }
+                });
+            },
+
+            async fetchHistoryData() {
+                return new Promise((resolve, reject) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getHistoryData();
+                    } else {
+                        setTimeout(() => {
+                            const mockHistory = {
+                                columns: ['기준월', 'DEAL', '차입처', '통화', '원화환산잔액'],
+                                data: [
+                                    { 기준월: '2024-01', DEAL: 'HL8285', 차입처: 'JP Morgan', 통화: 'USD', 원화환산잔액: 5500000000 },
+                                    { 기준월: '2024-02', DEAL: 'HL8285', 차입처: 'JP Morgan', 통화: 'USD', 원화환산잔액: 5400000000 },
+                                ]
+                            };
+                            resolve(mockHistory);
+                        }, 1000);
+                    }
+                });
+            },
+
+            async getUserPermission() {
+                return new Promise((resolve, reject) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getUserPermission();
+                    } else {
+                        resolve({ email: 'test@local.com', isAdmin: true });
+                    }
+                });
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  차트 매니저                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const ChartManager = {
+            instances: {},
+
+            init() {
+                // Chart.js datalabels 플러그인 등록
+                if (typeof ChartDataLabels !== 'undefined') {
+                    Chart.register(ChartDataLabels);
+                }
+            },
+
+            create(id, type, data, options) {
+                this.destroy(id);
+                const ctx = document.getElementById(id);
+                if (!ctx) return null;
+
+                this.instances[id] = new Chart(ctx, {
+                    type: type,
+                    data: data,
+                    options: options
+                });
+
+                return this.instances[id];
+            },
+
+            destroy(id) {
+                if (this.instances[id]) {
+                    this.instances[id].destroy();
+                    delete this.instances[id];
+                }
+            },
+
+            destroyAll() {
+                Object.keys(this.instances).forEach(id => this.destroy(id));
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  상태 관리                                        │
+        // └──────────────────────────────────────────────────┘
+
+        const AppState = {
+            data: {
+                raw: [],
+                filtered: [],
+                columns: [],
+                history: []
+            },
+            filters: {
+                active: {},
+                allowed: []
+            },
+            user: {
+                email: '',
+                isAdmin: false
+            },
+            ui: {
+                currentStep: 0,
+                selectedDeal: null
+            },
+            observers: [],
+
+            init() {
+                this.loadFromStorage();
+            },
+
+            subscribe(callback) {
+                this.observers.push(callback);
+            },
+
+            notify() {
+                this.observers.forEach(cb => cb());
+            },
+
+            setData(data) {
+                this.data.raw = data;
+                this.applyFilters();
+            },
+
+            setFilters(filters) {
+                this.filters.active = filters;
+                this.saveToStorage();
+                this.applyFilters();
+            },
+
+            applyFilters() {
+                this.data.filtered = this.data.raw.filter(d => {
+                    for (const [key, val] of Object.entries(this.filters.active)) {
+                        if (val && String(d[key]) !== val) return false;
+                    }
+                    return true;
+                });
+                this.notify();
+            },
+
+            saveToStorage() {
+                try {
+                    localStorage.setItem('appFilters', JSON.stringify(this.filters.active));
+                } catch (e) {
+                    console.warn('Failed to save filters:', e);
+                }
+            },
+
+            loadFromStorage() {
+                try {
+                    const saved = localStorage.getItem('appFilters');
+                    if (saved) {
+                        this.filters.active = JSON.parse(saved);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load filters:', e);
+                }
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  필터 매니저                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const FilterManager = {
+            init() {
+                const container = document.getElementById('filterSource');
+                container.innerHTML = '';
+
+                const excludeCols = ['원화환산잔액', '금액', '잔액'];
+                let filterableCols = AppState.data.columns.filter(c => !excludeCols.includes(c));
+
+                if (AppState.filters.allowed.length > 0) {
+                    filterableCols = filterableCols.filter(c => AppState.filters.allowed.includes(c));
+                }
+
+                document.getElementById('colCount').textContent = filterableCols.length;
+
+                filterableCols.forEach(col => {
+                    const chip = Utils.createElement('div', {
+                        className: 'col-chip',
+                        'data-col': col,
+                        role: 'listitem'
+                    });
+                    chip.innerHTML = `<i class="fas fa-tag text-slate-500"></i> ${Utils.escapeHtml(col)}`;
+                    container.appendChild(chip);
+                });
+
+                new Sortable(container, {
+                    group: { name: 'filters', pull: 'clone', put: false },
+                    sort: false,
+                    animation: 150
+                });
+
+                this.initDropZone();
+            },
+
+            initDropZone() {
+                const dropZone = document.getElementById('activeFilters');
+
+                new Sortable(dropZone, {
+                    group: 'filters',
+                    animation: 150,
+                    filter: ".no-drag",
+                    preventOnFilter: false,
+                    onAdd: (evt) => {
+                        const item = evt.item;
+                        const col = item.getAttribute('data-col');
+                        if (AppState.filters.active.hasOwnProperty(col)) {
+                            item.remove();
+                            return;
+                        }
+                        item.replaceWith(this.createWidget(col));
+                        AppState.filters.active[col] = '';
+                        document.getElementById('emptyMsg').classList.add('hidden');
+                    },
+                    onRemove: (evt) => {
+                        const col = evt.item.getAttribute('data-col');
+                        delete AppState.filters.active[col];
+                        if (Object.keys(AppState.filters.active).length === 0) {
+                            document.getElementById('emptyMsg').classList.remove('hidden');
+                        }
+                        AppState.applyFilters();
+                    }
+                });
+            },
+
+            createWidget(col) {
+                const wrapper = Utils.createElement('div', {
+                    className: 'filter-widget',
+                    'data-col': col,
+                    role: 'group',
+                    'aria-labelledby': `filter-label-${col}`
+                });
+
+                const label = Utils.createElement('label', {
+                    id: `filter-label-${col}`,
+                    textContent: col
+                });
+
+                const values = [...new Set(AppState.data.raw.map(d => d[col]))]
+                    .filter(v => v && String(v).trim() !== '')
+                    .sort();
+
+                const select = Utils.createElement('select', {
+                    className: 'no-drag',
+                    'aria-label': `${col} 필터 선택`
+                });
+
+                const defaultOption = Utils.createElement('option', {
+                    value: '',
+                    textContent: '전체 (All)'
+                });
+                select.appendChild(defaultOption);
+
+                values.forEach(v => {
+                    const option = Utils.createElement('option', {
+                        value: v,
+                        textContent: v
+                    });
+                    select.appendChild(option);
+                });
+
+                select.addEventListener('change', (e) => {
+                    AppState.filters.active[col] = e.target.value;
+                    AppState.applyFilters();
+                });
+
+                const removeBtn = Utils.createElement('button', {
+                    className: 'remove-btn no-drag',
+                    'aria-label': `${col} 필터 제거`
+                });
+                removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                removeBtn.addEventListener('click', () => {
+                    wrapper.remove();
+                    delete AppState.filters.active[col];
+                    if (Object.keys(AppState.filters.active).length === 0) {
+                        document.getElementById('emptyMsg').classList.remove('hidden');
+                    }
+                    AppState.applyFilters();
+                });
+
+                wrapper.appendChild(label);
+                wrapper.appendChild(select);
+                wrapper.appendChild(removeBtn);
+
+                return wrapper;
+            },
+
+            reset() {
+                const zone = document.getElementById('activeFilters');
+                Array.from(zone.children).forEach(child => {
+                    if (child.id !== 'emptyMsg') child.remove();
+                });
+                document.getElementById('emptyMsg').classList.remove('hidden');
+                AppState.filters.active = {};
+                AppState.applyFilters();
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  필터 프리셋                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const FilterPresets = {
+            presets: {},
+
+            init() {
+                try {
+                    const saved = localStorage.getItem('filterPresets');
+                    if (saved) {
+                        this.presets = JSON.parse(saved);
+                        this.updateCount();
+                    }
+                } catch (e) {
+                    console.warn('Failed to load presets:', e);
+                }
+            },
+
+            save(name) {
+                if (!name || !name.trim()) {
+                    Utils.showToast('프리셋 이름을 입력해주세요.', 'warning');
+                    return;
+                }
+
+                this.presets[name] = { ...AppState.filters.active };
+                localStorage.setItem('filterPresets', JSON.stringify(this.presets));
+                this.updateCount();
+                this.renderList();
+                Utils.showToast(`필터 프리셋 "${name}"이 저장되었습니다.`, 'success');
+            },
+
+            load(name) {
+                const preset = this.presets[name];
+                if (preset) {
+                    FilterManager.reset();
+                    AppState.filters.active = { ...preset };
+
+                    // UI 재구성
+                    Object.keys(preset).forEach(col => {
+                        const widget = FilterManager.createWidget(col);
+                        document.getElementById('activeFilters').appendChild(widget);
+                        const select = widget.querySelector('select');
+                        if (select) select.value = preset[col];
+                    });
+
+                    document.getElementById('emptyMsg').classList.add('hidden');
+                    AppState.applyFilters();
+                    Utils.showToast(`"${name}" 프리셋을 불러왔습니다.`, 'success');
+                }
+            },
+
+            delete(name) {
+                delete this.presets[name];
+                localStorage.setItem('filterPresets', JSON.stringify(this.presets));
+                this.updateCount();
+                this.renderList();
+                Utils.showToast(`"${name}" 프리셋이 삭제되었습니다.`, 'success');
+            },
+
+            showSaveDialog() {
+                const name = prompt('필터 프리셋 이름을 입력하세요:');
+                if (name) {
+                    this.save(name.trim());
+                }
+            },
+
+            toggleList() {
+                const list = document.getElementById('presetList');
+                list.classList.toggle('hidden');
+                if (!list.classList.contains('hidden')) {
+                    this.renderList();
+                }
+            },
+
+            renderList() {
+                const list = document.getElementById('presetList');
+                const presetNames = Object.keys(this.presets);
+
+                if (presetNames.length === 0) {
+                    list.innerHTML = '<p class="text-xs text-slate-500 text-center py-4">저장된 필터가 없습니다</p>';
+                    return;
+                }
+
+                list.innerHTML = presetNames.map(name => `
+                    <div class="preset-item">
+                        <span class="text-xs text-slate-300" onclick="FilterPresets.load('${Utils.escapeHtml(name)}')" style="cursor: pointer; flex: 1;">
+                            ${Utils.escapeHtml(name)}
+                        </span>
+                        <button onclick="event.stopPropagation(); FilterPresets.delete('${Utils.escapeHtml(name)}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `).join('');
+            },
+
+            updateCount() {
+                document.getElementById('presetCount').textContent = Object.keys(this.presets).length;
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  테이블 렌더러                                    │
+        // └──────────────────────────────────────────────────┘
+
+        const TableRenderer = {
+            displayCols: ['DEAL', '차입처', '통화', 'FROM', 'TO', '당월잔액', '적용율'],
+
+            renderHeaders() {
+                const thead = document.getElementById('tableHead');
+                thead.innerHTML = '';
+                const tr = document.createElement('tr');
+
+                this.displayCols.forEach(col => {
+                    const th = Utils.createElement('th', {
+                        className: "group relative hover:bg-slate-800 cursor-move border-[1px] border-transparent hover:border-slate-600 transition-colors",
+                        'data-col': col,
+                        scope: 'col'
+                    });
+                    
+                    // th 내부에 flex 컨테이너 생성 (가운데 정렬)
+                    const flexContainer = Utils.createElement('div', {
+                        className: 'flex justify-center items-center gap-2 w-full relative'
+                    });
+
+                    const colText = Utils.createElement('span', {
+                        textContent: col
+                    });
+                    flexContainer.appendChild(colText);
+
+                    const removeSpan = Utils.createElement('span', {
+                        className: 'absolute right-0 text-slate-500 hover:text-red-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity',
+                        role: 'button',
+                        'aria-label': `${col} 컬럼 제거`
+                    });
+                    removeSpan.innerHTML = '<i class="fas fa-times"></i>';
+                    removeSpan.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.removeColumn(col);
+                    });
+
+                    flexContainer.appendChild(removeSpan);
+                    th.appendChild(flexContainer);
+                    tr.appendChild(th);
+                });
+
+                thead.appendChild(tr);
+
+                new Sortable(tr, {
+                    group: 'filters',
+                    animation: 150,
+                    onAdd: (evt) => {
+                        const item = evt.item;
+                        const newCol = item.getAttribute('data-col');
+                        item.remove();
+
+                        if (!this.displayCols.includes(newCol)) {
+                            this.displayCols.splice(evt.newIndex, 0, newCol);
+                            this.renderHeaders();
+                            this.render(AppState.data.filtered);
+                        } else {
+                            this.renderHeaders();
+                        }
+                    },
+                    onUpdate: (evt) => {
+                        const movedItem = this.displayCols.splice(evt.oldIndex, 1)[0];
+                        this.displayCols.splice(evt.newIndex, 0, movedItem);
+                        this.render(AppState.data.filtered);
+                    }
+                });
+            },
+
+            removeColumn(col) {
+                this.displayCols = this.displayCols.filter(c => c !== col);
+                this.renderHeaders();
+                this.render(AppState.data.filtered);
+            },
+
+            render(data) {
+                const tbody = document.getElementById('tableBody');
+                document.getElementById('rowCount').textContent = `${data.length}건`;
+
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="${this.displayCols.length}" class="text-center py-8 text-slate-500">데이터가 없습니다.</td></tr>`;
+                    return;
+                }
+
+                const currentDeal = document.getElementById('detailCard').dataset.current;
+                const isMobile = window.innerWidth < 768;
+
+                tbody.innerHTML = data.slice(0, 100).map(d => {
+                    const isSelected = currentDeal === d['DEAL'];
+
+                    if (isMobile) {
+                        return this.renderMobileRow(d, isSelected);
+                    }
+
+                    const cells = this.displayCols.map(col => {
+                        let val = d[col] !== undefined ? d[col] : '-';
+                        let cls = '';
+
+                        if (col === 'DEAL') {
+                            cls = 'font-bold text-slate-200';
+                        } else if (col.includes('잔액') || col.includes('금액')) {
+                            val = (typeof val === 'number') ? Utils.formatNumber(val) : val;
+                            cls = 'text-right text-emerald-400 font-bold';
+                        } else if (col.includes('율')) {
+                            val = (typeof val === 'number') ? (val * 100).toFixed(2) + '%' : val;
+                            cls = 'text-blue-400';
+                        } else if (col === 'FROM' || col === 'TO') {
+                            cls = 'text-slate-400 text-xs';
+                        } else if (col === '통화') {
+                            return `<td><span class="px-2 py-0.5 rounded bg-slate-700 text-xs">${Utils.escapeHtml(val)}</span></td>`;
+                        }
+
+                        return `<td class="${cls}">${Utils.escapeHtml(val)}</td>`;
+                    }).join('');
+
+                    return `<tr onclick="DetailCard.show('${Utils.escapeHtml(d['DEAL'])}')" class="${isSelected ? 'selected' : ''}" role="row">${cells}</tr>`;
+                }).join('');
+            },
+
+            renderMobileRow(d, isSelected) {
+                return `
+                    <tr onclick="DetailCard.show('${Utils.escapeHtml(d['DEAL'])}')" class="${isSelected ? 'selected' : ''} block mb-4 border border-slate-700 rounded-lg">
+                        <td colspan="${this.displayCols.length}" class="block p-4">
+                            <div class="font-bold text-blue-400 mb-2">${Utils.escapeHtml(d['DEAL'])}</div>
+                            <div class="grid grid-cols-2 gap-2 text-sm">
+                                <div><span class="text-slate-500">차입처:</span> ${Utils.escapeHtml(d['차입처'])}</div>
+                                <div><span class="text-slate-500">통화:</span> ${Utils.escapeHtml(d['통화'])}</div>
+                                <div><span class="text-slate-500">잔액:</span> ${Utils.formatNumber(d['원화환산잔액'])}원</div>
+                                <div><span class="text-slate-500">만기:</span> ${Utils.escapeHtml(d['TO'])}</div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  상세 카드                                        │
+        // └──────────────────────────────────────────────────┘
+
+        const DetailCard = {
+            show(dealId) {
+                const item = AppState.data.raw.find(d => d['DEAL'] === dealId);
+                if (!item) return;
+
+                document.getElementById('dc-deal').textContent = item['DEAL'] || '-';
+                document.getElementById('dc-remark').textContent = item['비고'] || '-';
+                document.getElementById('dc-lender').textContent = item['차입처'] || '-';
+                document.getElementById('dc-fundUse').textContent = item['자금용도'] || '-';
+                document.getElementById('dc-balance').textContent = Utils.formatNumber(item['원화환산잔액'] || 0);
+                document.getElementById('dc-currency').textContent = item['통화'] || '-';
+                document.getElementById('dc-type').textContent = item['금리유형'] || '-';
+                document.getElementById('dc-rate').textContent = ((item['적용율'] || 0) * 100).toFixed(2) + '%';
+                document.getElementById('dc-maturity').textContent = item['TO'] || '-';
+
+                const card = document.getElementById('detailCard');
+                card.classList.remove('hidden');
+                card.dataset.current = dealId;
+
+                TableRenderer.render(AppState.data.filtered);
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  KPI 업데이트                                     │
+        // └──────────────────────────────────────────────────┘
+
+        const KPIRenderer = {
+            update(data) {
+                const total = data.reduce((a, b) => a + (b['원화환산잔액'] || 0), 0);
+                const wSum = data.reduce((a, b) => a + ((b['원화환산잔액'] || 0) * (b['적용율'] || 0)), 0);
+                const avgRate = total ? wSum / total : 0;
+
+                const floatingSum = data.reduce((a, b) => {
+                    const type = String(b['금리유형'] || '').trim();
+                    if (type === '변동' || type.toLowerCase() === 'floating') {
+                        return a + (b['원화환산잔액'] || 0);
+                    }
+                    return a;
+                }, 0);
+                const floatingRatio = total ? floatingSum / total : 0;
+
+                document.getElementById('kpiArea').innerHTML = `
+                    <div class="kpi-box border-l-4 border-blue-500 bg-[#1e293b] p-4 rounded-xl shadow-sm">
+                        <p class="text-sm text-slate-500 font-bold uppercase">총 잔액</p>
+                        <p class="text-3xl font-bold text-white mt-1 kpi-value">${Utils.formatNumber(total / 1e8)}억</p>
+                    </div>
+                    <div class="kpi-box border-l-4 border-emerald-500 bg-[#1e293b] p-4 rounded-xl shadow-sm">
+                        <p class="text-sm text-slate-500 font-bold uppercase">가중평균 금리</p>
+                        <p class="text-3xl font-bold text-emerald-400 mt-1 kpi-value">${(avgRate * 100).toFixed(2)}%</p>
+                    </div>
+                    <div class="kpi-box border-l-4 border-amber-500 bg-[#1e293b] p-4 rounded-xl shadow-sm">
+                        <p class="text-sm text-slate-500 font-bold uppercase">조회 건수</p>
+                        <p class="text-3xl font-bold text-white mt-1 kpi-value">${data.length}건</p>
+                    </div>
+                    <div class="kpi-box border-l-4 border-violet-500 bg-[#1e293b] p-4 rounded-xl shadow-sm">
+                        <p class="text-sm text-slate-500 font-bold uppercase">변동 금리 비중</p>
+                        <div class="flex items-baseline gap-2">
+                            <p class="text-3xl font-bold text-violet-400 mt-1 kpi-value">${(floatingRatio * 100).toFixed(1)}%</p>
+                            <span class="text-sm text-slate-400">(${Utils.formatNumber(floatingSum / 1e8)}억)</span>
+                        </div>
+                    </div>
+                `;
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  차트 렌더러                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const ChartRenderer = {
+            render(data) {
+                const commonOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#94a3b8', boxWidth: 10, font: { size: 11 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+
+                                    if (context.chart.config.type === 'doughnut') {
+                                        label += Utils.formatNumber(context.parsed / 1e8) + '억';
+                                    } else if (context.chart.config.options.indexAxis === 'y') {
+                                        label += Utils.formatNumber(context.parsed.x / 1e8) + '억';
+                                    } else {
+                                        label += Utils.formatNumber(context.parsed.y / 1e8) + '억';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                };
+
+                const axisStyle = {
+                    ticks: { color: '#64748b', font: { size: 11 } },
+                    grid: { color: '#334155' },
+                    border: { display: false }
+                };
+
+                // 1. 금융기관별
+                this.renderLenderChart(data, commonOptions, axisStyle);
+
+                // 2. 통화별
+                this.renderCurrencyChart(data, commonOptions);
+
+                // 3. 만기별
+                this.renderMaturityChart(data, commonOptions, axisStyle);
+            },
+
+            renderLenderChart(data, commonOptions, axisStyle) {
+                const lenderMap = data.reduce((acc, cur) => {
+                    const lender = cur['차입처'] || 'Unknown';
+                    acc[lender] = (acc[lender] || 0) + (cur['원화환산잔액'] || 0);
+                    return acc;
+                }, {});
+
+                let lenderArr = Object.entries(lenderMap).map(([k, v]) => ({ label: k, value: v }));
+                lenderArr.sort((a, b) => b.value - a.value);
+
+                const topLenders = lenderArr.slice(0, 7);
+                const lenderTotal = data.reduce((a, b) => a + (b['원화환산잔액'] || 0), 0);
+
+                ChartManager.create('chartLender', 'bar', {
+                    labels: topLenders.map(d => d.label),
+                    datasets: [{
+                        label: '익스포저(원화)',
+                        data: topLenders.map(d => d.value),
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4,
+                        barThickness: 18
+                    }]
+                }, {
+                    ...commonOptions,
+                    indexAxis: 'y',
+                    layout: { 
+                        padding: { 
+                            right: 140,
+                            left: 10,
+                            top: 10,
+                            bottom: 10
+                        } 
+                    },
+                    scales: {
+                        x: {
+                            ...axisStyle,
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: function (value) { return (value / 1e8).toFixed(0); }
+                            }
+                        },
+                        y: { ...axisStyle, grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.parsed.x;
+                                    const percent = lenderTotal > 0 ? (value / lenderTotal * 100).toFixed(1) : 0;
+                                    return `${Utils.formatNumber(value / 1e8)}억 (${percent}%)`;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: true,
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 8,
+                            color: '#94a3b8',
+                            font: { 
+                                size: 11, // Y축 레이블과 동일한 크기
+                                weight: 'normal'
+                            },
+                            formatter: function (value) {
+                                const percent = lenderTotal > 0 ? (value / lenderTotal * 100).toFixed(0) : 0;
+                                return `${Utils.formatNumber(value / 1e8)}억 (${percent}%)`;
+                            },
+                            clip: false
+                        }
+                    }
+                });
+            },
+
+            renderCurrencyChart(data, commonOptions) {
+                const currencyMap = data.reduce((acc, cur) => {
+                    const curr = cur['통화'] || 'Unknown';
+                    acc[curr] = (acc[curr] || 0) + (cur['원화환산잔액'] || 0);
+                    return acc;
+                }, {});
+
+                const currencyTotal = Object.values(currencyMap).reduce((a, b) => a + b, 0);
+                const currencyArr = Object.entries(currencyMap)
+                    .map(([k, v]) => ({
+                        label: k,
+                        value: v,
+                        percent: currencyTotal > 0 ? (v / currencyTotal * 100).toFixed(0) : 0
+                    }))
+                    .sort((a, b) => b.value - a.value);
+
+                const currencyColors = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'];
+
+                const legendContainer = document.getElementById('currencyLegend');
+                legendContainer.innerHTML = currencyArr.map((d, i) => `
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${currencyColors[i % currencyColors.length]}"></span>
+                            <span class="text-slate-300">${Utils.escapeHtml(d.label)}</span>
+                        </div>
+                        <span class="text-slate-400 text-right">${Utils.formatNumber(d.value / 1e8)}억 (${d.percent}%)</span>
+                    </div>
+                `).join('');
+
+                ChartManager.create('chartCurrency', 'doughnut', {
+                    labels: currencyArr.map(d => d.label),
+                    datasets: [{
+                        data: currencyArr.map(d => d.value),
+                        backgroundColor: currencyColors,
+                        borderWidth: 0
+                    }]
+                }, {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percent = total > 0 ? (value / total * 100).toFixed(1) : 0;
+                                    return `${Utils.formatNumber(value / 1e8)}억 (${percent}%)`;
+                                }
+                            }
+                        }
+                    }
+                });
+            },
+
+            renderMaturityChart(data, commonOptions, axisStyle) {
+                const yearMap = data.reduce((acc, cur) => {
+                    if (cur['TO']) {
+                        const year = String(cur['TO']).substring(0, 4);
+                        if (!isNaN(parseInt(year))) {
+                            acc[year] = (acc[year] || 0) + (cur['원화환산잔액'] || 0);
+                        }
+                    }
+                    return acc;
+                }, {});
+
+                const years = Object.keys(yearMap).map(y => parseInt(y)).filter(y => !isNaN(y));
+                let yearArr = [];
+
+                if (years.length > 0) {
+                    const minYear = Math.min(...years);
+                    const maxYear = Math.max(...years);
+
+                    for (let y = minYear; y <= maxYear; y++) {
+                        yearArr.push({
+                            label: String(y),
+                            value: yearMap[String(y)] || 0
+                        });
+                    }
+                }
+
+                ChartManager.create('chartMaturity', 'bar', {
+                    labels: yearArr.map(d => d.label),
+                    datasets: [{
+                        label: '만기 도래액(원화)',
+                        data: yearArr.map(d => d.value),
+                        backgroundColor: '#10b981',
+                        borderRadius: 4,
+                        barThickness: 20
+                    }]
+                }, {
+                    ...commonOptions,
+                    scales: {
+                        x: axisStyle,
+                        y: {
+                            ...axisStyle,
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: function (value) { return (value / 1e8).toFixed(0); }
+                            }
+                        }
+                    },
+                    plugins: {
+                        ...commonOptions.plugins,
+                        datalabels: { display: false }
+                    }
+                });
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  검증 렌더러                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const ValidationRenderer = {
+            render(validation) {
+                if (!validation) return;
+
+                const missing = validation.warnings.filter(w => w.field === '차입처').length;
+                const duplicates = validation.warnings.filter(w => w.message.includes('중복')).length;
+                const noMaturity = validation.warnings.filter(w => w.field === 'TO').length;
+                const totalRows = validation.summary?.totalRows || 0;
+
+                document.getElementById('validationResult').innerHTML = `
+                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
+                        <span><i class="fas fa-exclamation-circle text-amber-400 mr-2"></i>차입처 누락</span>
+                        <span class="font-bold ${missing > 0 ? 'text-amber-400' : 'text-emerald-400'}">${missing}건</span>
+                    </div>
+                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
+                        <span><i class="fas fa-copy text-amber-400 mr-2"></i>DEAL 중복</span>
+                        <span class="font-bold ${duplicates > 0 ? 'text-amber-400' : 'text-emerald-400'}">${duplicates}건</span>
+                    </div>
+                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
+                        <span><i class="fas fa-calendar-times text-amber-400 mr-2"></i>만기일 누락</span>
+                        <span class="font-bold ${noMaturity > 0 ? 'text-amber-400' : 'text-emerald-400'}">${noMaturity}건</span>
+                    </div>
+                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
+                        <span><i class="fas fa-database text-blue-400 mr-2"></i>총 데이터</span>
+                        <span class="font-bold text-blue-400">${totalRows}건</span>
+                    </div>
+                `;
+
+                if (validation.errors.length > 0) {
+                    Utils.showToast(`${validation.errors.length}개의 오류가 발견되었습니다.`, 'error');
+                }
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  시계열 컨트롤러                                  │
+        // └──────────────────────────────────────────────────┘
+
+        const HistoryController = {
+            data: [],
+            filteredData: [],
+
+            async loadData() {
+                const btn = document.getElementById('loadHistoryBtn');
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로딩...';
+                btn.disabled = true;
+
+                try {
+                    const res = await DataService.fetchHistoryData();
+
+                    if (res.error) {
+                        throw new Error(res.error);
+                    }
+
+                    this.data = res.data || [];
+                    this.filteredData = [...this.data];
+
+                    this.populateFilters();
+                    this.updateChart();
+                    this.renderTable();
+
+                    Utils.showToast(`${this.data.length}건의 시계열 데이터를 불러왔습니다.`, 'success');
+                } catch (error) {
+                    ErrorHandler.handle(error, 'loadHistoryData');
+                } finally {
+                    btn.innerHTML = '<i class="fas fa-chart-line"></i> 데이터 불러오기';
+                    btn.disabled = false;
+                }
+            },
+
+            populateFilters() {
+                const lenders = [...new Set(this.data.map(d => d['차입처']))].filter(Boolean).sort();
+                const lenderSelect = document.getElementById('historyLenderFilter');
+                lenderSelect.innerHTML = '<option value="">전체</option>' +
+                    lenders.map(l => `<option value="${Utils.escapeHtml(l)}">${Utils.escapeHtml(l)}</option>`).join('');
+
+                const currencies = [...new Set(this.data.map(d => d['통화']))].filter(Boolean).sort();
+                const currencySelect = document.getElementById('historyCurrencyFilter');
+                currencySelect.innerHTML = '<option value="">전체</option>' +
+                    currencies.map(c => `<option value="${Utils.escapeHtml(c)}">${Utils.escapeHtml(c)}</option>`).join('');
+            },
+
+            updateChart() {
+                const lenderFilter = document.getElementById('historyLenderFilter').value;
+                const currencyFilter = document.getElementById('historyCurrencyFilter').value;
+
+                this.filteredData = this.data.filter(d => {
+                    if (lenderFilter && d['차입처'] !== lenderFilter) return false;
+                    if (currencyFilter && d['통화'] !== currencyFilter) return false;
+                    return true;
+                });
+
+                const monthlyData = {};
+                this.filteredData.forEach(d => {
+                    const month = d['기준월'];
+                    if (!monthlyData[month]) monthlyData[month] = 0;
+                    monthlyData[month] += (d['원화환산잔액'] || 0);
+                });
+
+                const months = Object.keys(monthlyData).sort();
+                const values = months.map(m => monthlyData[m]);
+
+                ChartManager.create('chartHistory', 'line', {
+                    labels: months,
+                    datasets: [{
+                        label: '총 잔액 (원화)',
+                        data: values,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#3b82f6'
+                    }]
+                }, {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#94a3b8', font: { size: 12 } }
+                        },
+                        datalabels: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return `${Utils.formatNumber(context.parsed.y / 1e8)}억`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#64748b', font: { size: 11 } },
+                            grid: { color: '#334155' }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: function (value) { return (value / 1e8).toFixed(0) + '억'; }
+                            },
+                            grid: { color: '#334155' }
+                        }
+                    }
+                });
+
+                this.renderTable();
+            },
+
+            renderTable() {
+                const thead = document.getElementById('historyTableHead');
+                const tbody = document.getElementById('historyTableBody');
+
+                document.getElementById('historyRowCount').textContent = `${this.filteredData.length}건`;
+
+                const monthlyData = {};
+                this.filteredData.forEach(d => {
+                    const month = d['기준월'];
+                    if (!monthlyData[month]) monthlyData[month] = { total: 0, count: 0 };
+                    monthlyData[month].total += (d['원화환산잔액'] || 0);
+                    monthlyData[month].count += 1;
+                });
+
+                const months = Object.keys(monthlyData).sort().reverse();
+
+                thead.innerHTML = '<tr><th>기준월</th><th>건수</th><th class="text-right">총 잔액</th><th>전월 대비</th></tr>';
+
+                if (months.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-500">데이터가 없습니다.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = months.map((month, idx) => {
+                    const data = monthlyData[month];
+                    const prevMonth = months[idx + 1];
+                    const prevData = prevMonth ? monthlyData[prevMonth] : null;
+
+                    let changeText = '-';
+                    let changeClass = '';
+                    if (prevData) {
+                        const change = data.total - prevData.total;
+                        const changePercent = prevData.total > 0 ? (change / prevData.total * 100).toFixed(1) : 0;
+                        if (change > 0) {
+                            changeText = `+${Utils.formatNumber(change / 1e8)}억 (+${changePercent}%)`;
+                            changeClass = 'text-red-400';
+                        } else if (change < 0) {
+                            changeText = `${Utils.formatNumber(change / 1e8)}억 (${changePercent}%)`;
+                            changeClass = 'text-emerald-400';
+                        } else {
+                            changeText = '0';
+                        }
+                    }
+
+                    return `<tr>
+                        <td class="font-bold">${Utils.escapeHtml(month)}</td>
+                        <td>${data.count}건</td>
+                        <td class="text-right text-emerald-400 font-bold">${Utils.formatNumber(data.total / 1e8)}억</td>
+                        <td class="${changeClass}">${changeText}</td>
+                    </tr>`;
+                }).join('');
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  메인 앱 컨트롤러                                 │
+        // └──────────────────────────────────────────────────┘
+
+        const AppController = {
+            async init() {
+                try {
+                    AppState.init();
+                    FilterPresets.init();
+                    ChartManager.init(); // Chart.js 플러그인 등록
+
+                    const user = await DataService.getUserPermission();
+                    this.initUser(user);
+
+                    // 옵저버 등록
+                    AppState.subscribe(() => {
+                        TableRenderer.render(AppState.data.filtered);
+                        KPIRenderer.update(AppState.data.filtered);
+                        ChartRenderer.render(AppState.data.filtered);
+                        document.getElementById('detailCard').classList.add('hidden');
+                    });
+                } catch (error) {
+                    ErrorHandler.handle(error, 'init');
+                }
+            },
+
+            initUser(user) {
+                AppState.user = user;
+
+                const badge = document.getElementById('userBadge');
+
+                if (user.isAdmin) {
+                    badge.innerHTML = '<i class="fas fa-shield-alt text-blue-400 mr-1"></i> Admin';
+                    badge.className = "px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800 text-[10px]";
+
+                    document.querySelectorAll('.admin-only').forEach(el => {
+                        el.classList.remove('admin-only');
+                        el.style.display = 'inline-block';
+                    });
+                    this.goStep(0);
+                } else {
+                    badge.innerHTML = '<i class="fas fa-user text-slate-400 mr-1"></i> Viewer';
+                    this.fetchData(true);
+                }
+            },
+
+            goStep(n) {
+                document.querySelectorAll('.step-view').forEach(el => el.classList.add('hidden'));
+                const targetStep = document.getElementById(`step-${n}`);
+                if (targetStep) targetStep.classList.remove('hidden');
+
+                document.querySelectorAll('.step-btn').forEach((btn) => {
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-selected', 'false');
+                    if (btn.id === `btn-step-${n}`) {
+                        btn.classList.add('active');
+                        btn.setAttribute('aria-selected', 'true');
+                    }
+                });
+
+                AppState.ui.currentStep = n;
+
+                if (n === 1) {
+                    ValidationRenderer.render(AppState.validation);
+                }
+            },
+
+            async fetchData(autoStart = false) {
+                LoadingManager.show('데이터를 불러오는 중...');
+
+                try {
+                    const res = await DataService.fetchData();
+
+                    if (res.error) {
+                        throw new Error(res.error);
+                    }
+
+                    AppState.data.raw = res.data || [];
+                    AppState.data.columns = res.columns || [];
+                    AppState.filters.allowed = res.allowedFilters || [];
+                    AppState.validation = res.validation;
+
+                    // 데이터 소스 뱃지 표시
+                    const sourceBadge = document.getElementById('dataSourceBadge');
+                    if (res.dataSource === 'snapshot') {
+                        sourceBadge.textContent = '📸 Snapshot';
+                        sourceBadge.classList.remove('hidden');
+                    } else {
+                        sourceBadge.textContent = '🔴 Live';
+                        sourceBadge.classList.remove('hidden');
+                    }
+
+                    TableRenderer.renderHeaders();
+                    FilterManager.init();
+                    AppState.applyFilters();
+
+                    if (!AppState.user.isAdmin) {
+                        this.goStep(2);
+                    } else {
+                        document.getElementById('btn-step-1').disabled = false;
+                        this.goStep(1);
+                    }
+
+                    Utils.showToast(`${AppState.data.raw.length}건의 데이터를 불러왔습니다.`, 'success');
+                } catch (error) {
+                    ErrorHandler.handle(error, 'fetchData');
+                } finally {
+                    LoadingManager.hide();
+                }
+            },
+
+            exportToCSV() {
+                try {
+                    const headers = TableRenderer.displayCols.join(',');
+                    const rows = AppState.data.filtered.map(d =>
+                        TableRenderer.displayCols.map(col => {
+                            const val = d[col];
+                            if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
+                                return `"${val.replace(/"/g, '""')}"`;
+                            }
+                            return val;
+                        }).join(',')
+                    );
+
+                    const csv = [headers, ...rows].join('\n');
+                    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `차입금_데이터_${new Date().toISOString().slice(0, 10)}.csv`;
+                    link.click();
+
+                    Utils.showToast('CSV 파일을 다운로드했습니다.', 'success');
+                } catch (error) {
+                    ErrorHandler.handle(error, 'exportToCSV');
+                }
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
+        // │  초기화                                           │
+        // └──────────────────────────────────────────────────┘
+
+        window.onload = () => AppController.init();
+
+        // 페이지 언로드 시 정리
+        window.addEventListener('beforeunload', () => {
+            ChartManager.destroyAll();
+        });
+
+        // 외부 클릭시 프리셋 리스트 닫기
+        document.addEventListener('click', (e) => {
+            const presetList = document.getElementById('presetList');
+            const presetToggle = document.getElementById('presetToggle');
+
+            if (!presetList.contains(e.target) && !presetToggle.contains(e.target)) {
+                presetList.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>
