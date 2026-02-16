@@ -385,16 +385,13 @@
                         <p class="text-[10px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
                             <span id="userBadge"
                                 class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">Connecting...</span>
-                            <span id="dataSourceBadge" class="hidden bg-slate-800 px-2 py-0.5 rounded border border-slate-700"></span>
+                            <span id="dataSourceBadge"
+                                class="hidden bg-slate-800 px-2 py-0.5 rounded border border-slate-700"></span>
                         </p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <button onclick="AppController.exportToCSV()" id="exportBtn"
-                        class="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white border border-emerald-700 hover:bg-emerald-500 transition-all flex items-center gap-2">
-                        <i class="fas fa-download"></i> <span class="hidden md:inline">CSV 내보내기</span>
-                    </button>
                     <button onclick="AppController.fetchData(true)" id="refreshBtn"
                         class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all flex items-center gap-2">
                         <i class="fas fa-sync-alt"></i> <span class="hidden md:inline">새로고침</span>
@@ -410,8 +407,6 @@
                     aria-selected="false" disabled>2. 무결성 검증</button>
                 <button class="step-btn" onclick="AppController.goStep(2)" id="btn-step-2" role="tab"
                     aria-selected="true">분석 대시보드</button>
-                <button class="step-btn" onclick="AppController.goStep(3)" id="btn-step-3" role="tab"
-                    aria-selected="false">시계열 분석</button>
             </div>
 
             <!-- VIEW 0: Sync (Admin Only) -->
@@ -484,8 +479,8 @@
                 </div>
 
                 <!-- KPI -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="kpiArea" role="region"
-                    aria-label="주요 지표"></div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="kpiArea" role="region" aria-label="주요 지표">
+                </div>
 
                 <!-- Charts Area -->
                 <div id="chartArea" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -563,59 +558,6 @@
                         <table class="data-table relative" role="grid" aria-label="차입금 데이터 목록">
                             <thead id="tableHead" class="sticky top-0 z-10"></thead>
                             <tbody id="tableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- VIEW 3: Time Series Analysis -->
-            <div id="step-3" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-3">
-                <div class="card p-6 mb-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-white">차입금 시계열 분석</h3>
-                            <p class="text-xs text-slate-400 mt-1">월별 차입금 잔액 추이를 확인합니다.</p>
-                        </div>
-                        <button onclick="HistoryController.loadData()" id="loadHistoryBtn"
-                            class="px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all flex items-center gap-2">
-                            <i class="fas fa-chart-line"></i> 데이터 불러오기
-                        </button>
-                    </div>
-
-                    <!-- Filter -->
-                    <div class="flex gap-4 mb-6">
-                        <div class="flex-1">
-                            <label class="text-xs text-slate-400 block mb-1">차입처 선택</label>
-                            <select id="historyLenderFilter" onchange="HistoryController.updateChart()"
-                                class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white">
-                                <option value="">전체</option>
-                            </select>
-                        </div>
-                        <div class="flex-1">
-                            <label class="text-xs text-slate-400 block mb-1">통화 선택</label>
-                            <select id="historyCurrencyFilter" onchange="HistoryController.updateChart()"
-                                class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white">
-                                <option value="">전체</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Chart -->
-                    <div class="h-96 relative">
-                        <canvas id="chartHistory" aria-label="차입금 시계열 차트"></canvas>
-                    </div>
-                </div>
-
-                <!-- Table -->
-                <div class="card h-[400px] flex flex-col">
-                    <div class="p-4 border-b border-slate-700 bg-slate-800/30 flex justify-between items-center shrink-0">
-                        <h4 class="font-bold text-slate-300 text-sm">월별 데이터 <span
-                                class="text-xs font-normal text-slate-500 ml-1" id="historyRowCount"></span></h4>
-                    </div>
-                    <div class="overflow-auto flex-grow">
-                        <table class="data-table relative">
-                            <thead id="historyTableHead" class="sticky top-0 z-10"></thead>
-                            <tbody id="historyTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -820,27 +762,7 @@
                 });
             },
 
-            async fetchHistoryData() {
-                return new Promise((resolve, reject) => {
-                    if (typeof google !== 'undefined' && google.script) {
-                        google.script.run
-                            .withSuccessHandler(resolve)
-                            .withFailureHandler(reject)
-                            .getHistoryData();
-                    } else {
-                        setTimeout(() => {
-                            const mockHistory = {
-                                columns: ['기준월', 'DEAL', '차입처', '통화', '원화환산잔액'],
-                                data: [
-                                    { 기준월: '2024-01', DEAL: 'HL8285', 차입처: 'JP Morgan', 통화: 'USD', 원화환산잔액: 5500000000 },
-                                    { 기준월: '2024-02', DEAL: 'HL8285', 차입처: 'JP Morgan', 통화: 'USD', 원화환산잔액: 5400000000 },
-                                ]
-                            };
-                            resolve(mockHistory);
-                        }, 1000);
-                    }
-                });
-            },
+
 
             async getUserPermission() {
                 return new Promise((resolve, reject) => {
@@ -1233,7 +1155,7 @@
                         'data-col': col,
                         scope: 'col'
                     });
-                    
+
                     // th 내부에 flex 컨테이너 생성 (가운데 정렬)
                     const flexContainer = Utils.createElement('div', {
                         className: 'flex justify-center items-center gap-2 w-full relative'
@@ -1498,13 +1420,13 @@
                 }, {
                     ...commonOptions,
                     indexAxis: 'y',
-                    layout: { 
-                        padding: { 
+                    layout: {
+                        padding: {
                             right: 140,
                             left: 10,
                             top: 10,
                             bottom: 10
-                        } 
+                        }
                     },
                     scales: {
                         x: {
@@ -1536,7 +1458,7 @@
                             align: 'end',
                             offset: 8,
                             color: '#94a3b8',
-                            font: { 
+                            font: {
                                 size: 11, // Y축 레이블과 동일한 크기
                                 weight: 'normal'
                             },
@@ -1701,175 +1623,7 @@
             }
         };
 
-        // ┌──────────────────────────────────────────────────┐
-        // │  시계열 컨트롤러                                  │
-        // └──────────────────────────────────────────────────┘
 
-        const HistoryController = {
-            data: [],
-            filteredData: [],
-
-            async loadData() {
-                const btn = document.getElementById('loadHistoryBtn');
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로딩...';
-                btn.disabled = true;
-
-                try {
-                    const res = await DataService.fetchHistoryData();
-
-                    if (res.error) {
-                        throw new Error(res.error);
-                    }
-
-                    this.data = res.data || [];
-                    this.filteredData = [...this.data];
-
-                    this.populateFilters();
-                    this.updateChart();
-                    this.renderTable();
-
-                    Utils.showToast(`${this.data.length}건의 시계열 데이터를 불러왔습니다.`, 'success');
-                } catch (error) {
-                    ErrorHandler.handle(error, 'loadHistoryData');
-                } finally {
-                    btn.innerHTML = '<i class="fas fa-chart-line"></i> 데이터 불러오기';
-                    btn.disabled = false;
-                }
-            },
-
-            populateFilters() {
-                const lenders = [...new Set(this.data.map(d => d['차입처']))].filter(Boolean).sort();
-                const lenderSelect = document.getElementById('historyLenderFilter');
-                lenderSelect.innerHTML = '<option value="">전체</option>' +
-                    lenders.map(l => `<option value="${Utils.escapeHtml(l)}">${Utils.escapeHtml(l)}</option>`).join('');
-
-                const currencies = [...new Set(this.data.map(d => d['통화']))].filter(Boolean).sort();
-                const currencySelect = document.getElementById('historyCurrencyFilter');
-                currencySelect.innerHTML = '<option value="">전체</option>' +
-                    currencies.map(c => `<option value="${Utils.escapeHtml(c)}">${Utils.escapeHtml(c)}</option>`).join('');
-            },
-
-            updateChart() {
-                const lenderFilter = document.getElementById('historyLenderFilter').value;
-                const currencyFilter = document.getElementById('historyCurrencyFilter').value;
-
-                this.filteredData = this.data.filter(d => {
-                    if (lenderFilter && d['차입처'] !== lenderFilter) return false;
-                    if (currencyFilter && d['통화'] !== currencyFilter) return false;
-                    return true;
-                });
-
-                const monthlyData = {};
-                this.filteredData.forEach(d => {
-                    const month = d['기준월'];
-                    if (!monthlyData[month]) monthlyData[month] = 0;
-                    monthlyData[month] += (d['원화환산잔액'] || 0);
-                });
-
-                const months = Object.keys(monthlyData).sort();
-                const values = months.map(m => monthlyData[m]);
-
-                ChartManager.create('chartHistory', 'line', {
-                    labels: months,
-                    datasets: [{
-                        label: '총 잔액 (원화)',
-                        data: values,
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#3b82f6'
-                    }]
-                }, {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: { color: '#94a3b8', font: { size: 12 } }
-                        },
-                        datalabels: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function (context) {
-                                    return `${Utils.formatNumber(context.parsed.y / 1e8)}억`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: '#64748b', font: { size: 11 } },
-                            grid: { color: '#334155' }
-                        },
-                        y: {
-                            ticks: {
-                                color: '#64748b',
-                                font: { size: 11 },
-                                callback: function (value) { return (value / 1e8).toFixed(0) + '억'; }
-                            },
-                            grid: { color: '#334155' }
-                        }
-                    }
-                });
-
-                this.renderTable();
-            },
-
-            renderTable() {
-                const thead = document.getElementById('historyTableHead');
-                const tbody = document.getElementById('historyTableBody');
-
-                document.getElementById('historyRowCount').textContent = `${this.filteredData.length}건`;
-
-                const monthlyData = {};
-                this.filteredData.forEach(d => {
-                    const month = d['기준월'];
-                    if (!monthlyData[month]) monthlyData[month] = { total: 0, count: 0 };
-                    monthlyData[month].total += (d['원화환산잔액'] || 0);
-                    monthlyData[month].count += 1;
-                });
-
-                const months = Object.keys(monthlyData).sort().reverse();
-
-                thead.innerHTML = '<tr><th>기준월</th><th>건수</th><th class="text-right">총 잔액</th><th>전월 대비</th></tr>';
-
-                if (months.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-500">데이터가 없습니다.</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = months.map((month, idx) => {
-                    const data = monthlyData[month];
-                    const prevMonth = months[idx + 1];
-                    const prevData = prevMonth ? monthlyData[prevMonth] : null;
-
-                    let changeText = '-';
-                    let changeClass = '';
-                    if (prevData) {
-                        const change = data.total - prevData.total;
-                        const changePercent = prevData.total > 0 ? (change / prevData.total * 100).toFixed(1) : 0;
-                        if (change > 0) {
-                            changeText = `+${Utils.formatNumber(change / 1e8)}억 (+${changePercent}%)`;
-                            changeClass = 'text-red-400';
-                        } else if (change < 0) {
-                            changeText = `${Utils.formatNumber(change / 1e8)}억 (${changePercent}%)`;
-                            changeClass = 'text-emerald-400';
-                        } else {
-                            changeText = '0';
-                        }
-                    }
-
-                    return `<tr>
-                        <td class="font-bold">${Utils.escapeHtml(month)}</td>
-                        <td>${data.count}건</td>
-                        <td class="text-right text-emerald-400 font-bold">${Utils.formatNumber(data.total / 1e8)}억</td>
-                        <td class="${changeClass}">${changeText}</td>
-                    </tr>`;
-                }).join('');
-            }
-        };
 
         // ┌──────────────────────────────────────────────────┐
         // │  메인 앱 컨트롤러                                 │
@@ -1982,31 +1736,7 @@
                 }
             },
 
-            exportToCSV() {
-                try {
-                    const headers = TableRenderer.displayCols.join(',');
-                    const rows = AppState.data.filtered.map(d =>
-                        TableRenderer.displayCols.map(col => {
-                            const val = d[col];
-                            if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
-                                return `"${val.replace(/"/g, '""')}"`;
-                            }
-                            return val;
-                        }).join(',')
-                    );
 
-                    const csv = [headers, ...rows].join('\n');
-                    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `차입금_데이터_${new Date().toISOString().slice(0, 10)}.csv`;
-                    link.click();
-
-                    Utils.showToast('CSV 파일을 다운로드했습니다.', 'success');
-                } catch (error) {
-                    ErrorHandler.handle(error, 'exportToCSV');
-                }
-            }
         };
 
         // ┌──────────────────────────────────────────────────┐
