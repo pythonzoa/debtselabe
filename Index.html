@@ -669,6 +669,29 @@
                 });
             },
 
+            async getScheduleData() {
+                return new Promise((resolve, reject) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getScheduleData();
+                    } else {
+                        // 로컬 테스트용 목 데이터
+                        setTimeout(() => resolve({
+                            yearlyData: [
+                                { year: '2025', amount: 12500000000 },
+                                { year: '2026', amount: 38700000000 },
+                                { year: '2027', amount: 52300000000 },
+                                { year: '2028', amount: 44100000000 },
+                                { year: '2029', amount: 29800000000 },
+                                { year: '2030', amount: 18200000000 },
+                            ]
+                        }), 300);
+                    }
+                });
+            },
+
             async getVersionHistory() {
                 return new Promise((resolve, reject) => {
                     if (typeof google !== 'undefined' && google.script) {
@@ -729,6 +752,7 @@
             user: { email: '', isAdmin: false },
             ui: { currentStep: 0, selectedDeal: null },
             versionHistory: null,   // fetchData() 시 캐싱
+            scheduleData: null,     // fetchData() 시 캐싱
             observers: [],
 
             init() { this.loadFromStorage(); },
@@ -1363,33 +1387,55 @@
             },
 
             renderMaturityChart(data, commonOptions, axisStyle) {
-                const yearMap = data.reduce((acc, cur) => {
-                    if (cur['TO']) {
-                        const year = String(cur['TO']).substring(0, 4);
-                        if (!isNaN(parseInt(year))) acc[year] = (acc[year] || 0) + (cur['원화환산잔액'] || 0);
-                    }
-                    return acc;
-                }, {});
-
-                const years = Object.keys(yearMap).map(y => parseInt(y)).filter(y => !isNaN(y));
+                // 상환스케줄 데이터 우선 사용, 없으면 TO열 기반으로 폴백
                 let yearArr = [];
 
-                if (years.length > 0) {
-                    const minYear = Math.min(...years);
-                    const maxYear = Math.max(...years);
-                    for (let y = minYear; y <= maxYear; y++) {
-                        yearArr.push({ label: String(y), value: yearMap[String(y)] || 0 });
+                if (AppState.scheduleData && AppState.scheduleData.yearlyData && AppState.scheduleData.yearlyData.length > 0) {
+                    // 13_상환스케줄 시트의 D열(날짜) + I열(금액) 기반
+                    yearArr = AppState.scheduleData.yearlyData;
+                } else {
+                    // 폴백: 기존 TO열 기반
+                    const yearMap = data.reduce((acc, cur) => {
+                        if (cur['TO']) {
+                            const year = String(cur['TO']).substring(0, 4);
+                            if (!isNaN(parseInt(year))) {
+                                acc[year] = (acc[year] || 0) + (cur['원화환산잔액'] || 0);
+                            }
+                        }
+                        return acc;
+                    }, {});
+
+                    const years = Object.keys(yearMap).map(y => parseInt(y)).filter(y => !isNaN(y));
+                    if (years.length > 0) {
+                        const minYear = Math.min(...years);
+                        const maxYear = Math.max(...years);
+                        for (let y = minYear; y <= maxYear; y++) {
+                            yearArr.push({ year: String(y), amount: yearMap[String(y)] || 0 });
+                        }
                     }
                 }
 
                 ChartManager.create('chartMaturity', 'bar', {
-                    labels: yearArr.map(d => d.label),
-                    datasets: [{ label: '만기 도래액(원화)', data: yearArr.map(d => d.value), backgroundColor: '#10b981', borderRadius: 4, barThickness: 20 }]
+                    labels: yearArr.map(d => d.year),
+                    datasets: [{
+                        label: '만기 도래액',
+                        data: yearArr.map(d => d.amount),
+                        backgroundColor: '#10b981',
+                        borderRadius: 4,
+                        barThickness: 20
+                    }]
                 }, {
                     ...commonOptions,
                     scales: {
                         x: axisStyle,
-                        y: { ...axisStyle, ticks: { color: '#64748b', font: { size: 11 }, callback: v => (v / 1e8).toFixed(0) } }
+                        y: {
+                            ...axisStyle,
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: v => (v / 1e8).toFixed(0)
+                            }
+                        }
                     },
                     plugins: { ...commonOptions.plugins, datalabels: { display: false } }
                 });
@@ -1574,10 +1620,11 @@
                 LoadingManager.show('데이터를 불러오는 중...');
 
                 try {
-                    // 데이터 + 버전 히스토리 동시 호출
-                    const [res, versionRes] = await Promise.all([
+                    // 데이터 + 버전 히스토리 + 상환스케줄 동시 호출
+                    const [res, versionRes, scheduleRes] = await Promise.all([
                         DataService.fetchData(),
-                        DataService.getVersionHistory()
+                        DataService.getVersionHistory(),
+                        DataService.getScheduleData()
                     ]);
 
                     if (res.error) throw new Error(res.error);
@@ -1590,6 +1637,11 @@
                     // 버전 히스토리 캐싱 (오류 시 무시)
                     if (!versionRes.error) {
                         AppState.versionHistory = versionRes;
+                    }
+
+                    // 상환스케줄 캐싱 (오류 시 무시)
+                    if (!scheduleRes.error) {
+                        AppState.scheduleData = scheduleRes;
                     }
 
                     const sourceBadge = document.getElementById('dataSourceBadge');

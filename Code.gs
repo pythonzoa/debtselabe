@@ -550,6 +550,88 @@ function getHistoryData() {
 }
 
 // ┌──────────────────────────────────────────────────┐
+// │  상환스케줄 데이터                                │
+// └──────────────────────────────────────────────────┘
+
+/**
+ * '13_상환스케줄' 시트에서 D열(날짜)과 I열(금액)을 읽어 연도별로 합산
+ * @returns {Object} { yearlyData: Array<{year, amount}> }
+ */
+function getScheduleData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('13_상환스케줄');
+
+    if (!sheet) {
+      throw new AppError(
+        "'13_상환스케줄' 시트를 찾을 수 없습니다.",
+        "SHEET_NOT_FOUND",
+        { sheetName: '13_상환스케줄' }
+      );
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return { yearlyData: [] };
+    }
+
+    // D열(4번째)과 I열(9번째) 읽기 — 4행부터 데이터 시작 (1~3행 헤더)
+    const dataStartRow = 4;
+    const rowCount = lastRow - dataStartRow + 1;
+    if (rowCount < 1) return { yearlyData: [] };
+
+    const dateRange   = sheet.getRange(dataStartRow, 4, rowCount, 1).getDisplayValues(); // D열
+    const amountRange = sheet.getRange(dataStartRow, 9, rowCount, 1).getDisplayValues(); // I열
+
+    // 연도별 합산
+    const yearMap = {};
+
+    for (let i = 0; i < dateRange.length; i++) {
+      const dateStr  = String(dateRange[i][0] || '').trim();
+      const amountStr = String(amountRange[i][0] || '').trim();
+
+      if (!dateStr || !amountStr) continue;
+
+      // 날짜에서 연도 추출 (YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD 등 대응)
+      const yearMatch = dateStr.match(/^(\d{4})/);
+      if (!yearMatch) continue;
+
+      const year = yearMatch[1];
+      const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
+
+      if (amount === 0) continue;
+
+      yearMap[year] = (yearMap[year] || 0) + amount;
+    }
+
+    // 연도 오름차순 정렬
+    const years = Object.keys(yearMap).map(Number).sort((a, b) => a - b);
+
+    // 빈 연도 없이 연속된 범위로 채우기
+    const yearlyData = [];
+    if (years.length > 0) {
+      const minYear = years[0];
+      const maxYear = years[years.length - 1];
+      for (let y = minYear; y <= maxYear; y++) {
+        yearlyData.push({ year: String(y), amount: yearMap[String(y)] || 0 });
+      }
+    }
+
+    logActivity('getScheduleData', { rows: dateRange.length, years: yearlyData.length });
+
+    return { yearlyData };
+  } catch (e) {
+    if (e instanceof AppError) return e.toJSON();
+    Logger.log('getScheduleData error: ' + e.toString());
+    return new AppError(
+      "상환스케줄 데이터 로드 실패: " + e.message,
+      "SCHEDULE_DATA_FAILED",
+      { originalError: e.toString() }
+    ).toJSON();
+  }
+}
+
+// ┌──────────────────────────────────────────────────┐
 // │  버전 히스토리                                    │
 // └──────────────────────────────────────────────────┘
 
