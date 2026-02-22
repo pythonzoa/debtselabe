@@ -8,8 +8,6 @@ const SYSTEM_ADMINS = [
 const ADMIN_SHEET_NAME = '__ADMIN_CONFIG__';
 const SNAPSHOT_SHEET_NAME = '__DASHBOARD_DB__';
 const MASTER_SHEET_NAME = '20_차입금마스터';
-const HISTORY_SHEET_NAME = '22_차입금History';
-
 const PAGE_SIZE = 1000;
 const MAX_ROWS_PER_REQUEST = 5000;
 
@@ -131,17 +129,6 @@ function verifyAdminPermission() {
       { email: perm.email }
     );
   }
-
-  const currentUser = Session.getEffectiveUser().getEmail().toLowerCase();
-  const config = getAppConfig();
-  if (!config.admins.includes(currentUser)) {
-    throw new AppError(
-      "권한 검증 실패",
-      "PERMISSION_VERIFICATION_FAILED",
-      { email: currentUser }
-    );
-  }
-
   return perm;
 }
 
@@ -233,70 +220,6 @@ function validateData(data) {
       warningCount: warnings.length
     }
   };
-}
-
-function publishData() {
-  verifyAdminPermission();
-
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sourceSheet = ss.getSheetByName(MASTER_SHEET_NAME);
-
-    if (!sourceSheet) {
-      throw new AppError(
-        "원본 시트를 찾을 수 없습니다.",
-        "SHEET_NOT_FOUND",
-        { sheetName: MASTER_SHEET_NAME }
-      );
-    }
-
-    let targetSheet = ss.getSheetByName(SNAPSHOT_SHEET_NAME);
-    if (!targetSheet) {
-      targetSheet = ss.insertSheet(SNAPSHOT_SHEET_NAME);
-      targetSheet.hideSheet();
-    }
-
-    const sourceData = sourceSheet.getDataRange().getValues();
-
-    if (sourceData.length === 0) {
-      throw new AppError(
-        "원본 시트에 데이터가 없습니다.",
-        "EMPTY_SHEET",
-        { sheetName: MASTER_SHEET_NAME }
-      );
-    }
-
-    targetSheet.clear();
-    targetSheet.getRange(1, 1, sourceData.length, sourceData[0].length).setValues(sourceData);
-
-    const now = new Date();
-    const metadata = {
-      lastUpdate: now.toISOString(),
-      updatedBy: Session.getEffectiveUser().getEmail(),
-      rowCount: sourceData.length,
-      columnCount: sourceData[0].length
-    };
-
-    targetSheet.getRange("A1").setNote(JSON.stringify(metadata, null, 2));
-
-    logActivity('publishData', {
-      rows: sourceData.length,
-      timestamp: now.toISOString()
-    });
-
-    return {
-      success: true,
-      timestamp: now.toLocaleString('ko-KR'),
-      metadata: metadata
-    };
-  } catch (e) {
-    if (e instanceof AppError) throw e;
-    throw new AppError(
-      "데이터 발행 실패: " + e.message,
-      "PUBLISH_FAILED",
-      { originalError: e.toString() }
-    );
-  }
 }
 
 function getData(startRow, maxRows) {
@@ -454,101 +377,6 @@ function getData(startRow, maxRows) {
   }
 }
 
-function getHistoryData() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(HISTORY_SHEET_NAME);
-
-    if (!sheet) {
-      throw new AppError(
-        "시계열 데이터 시트를 찾을 수 없습니다.",
-        "SHEET_NOT_FOUND",
-        { sheetName: HISTORY_SHEET_NAME }
-      );
-    }
-
-    const dataRange = sheet.getDataRange();
-    if (dataRange.getNumRows() === 0) {
-      throw new AppError(
-        "시트에 데이터가 없습니다.",
-        "EMPTY_SHEET",
-        { sheetName: HISTORY_SHEET_NAME }
-      );
-    }
-
-    const values = dataRange.getDisplayValues();
-
-    let headerRowIndex = -1;
-    const maxSearchRows = Math.min(20, values.length);
-
-    for (let i = 0; i < maxSearchRows; i++) {
-      if (values[i] && values[i].some(c => {
-        const normalized = String(c).toUpperCase().replace(/\s/g, '');
-        return normalized === '기준월' || normalized === 'DEAL' || normalized === '기준일';
-      })) {
-        headerRowIndex = i;
-        break;
-      }
-    }
-
-    if (headerRowIndex === -1) {
-      throw new AppError(
-        "헤더 행을 찾을 수 없습니다.",
-        "HEADER_NOT_FOUND",
-        { requiredColumns: ['기준월', 'DEAL', '기준일'] }
-      );
-    }
-
-    const headers = values[headerRowIndex].map(h => String(h).replace(/\s/g, ''));
-    const dataRows = values.slice(headerRowIndex + 1);
-
-    const cleanData = [];
-
-    for (const row of dataRows) {
-      const obj = {};
-      let hasValidData = false;
-
-      headers.forEach((h, i) => {
-        if (!h) return;
-
-        let val = row[i];
-
-        if (h.includes('잔액') || h.includes('금액')) {
-          const strVal = String(val);
-          val = parseFloat(strVal.replace(/,/g, '').replace(/%/g, '')) || 0;
-        }
-
-        obj[h] = val;
-
-        if ((h === '기준월' || h === '기준일' || h === 'DEAL') &&
-            val && String(val).trim() !== '') {
-          hasValidData = true;
-        }
-      });
-
-      if (hasValidData) {
-        cleanData.push(obj);
-      }
-    }
-
-    const validColumns = headers.filter(h => h && h !== '');
-
-    return {
-      columns: validColumns,
-      data: cleanData,
-      totalRows: cleanData.length
-    };
-  } catch (e) {
-    if (e instanceof AppError) return e.toJSON();
-    Logger.log('getHistoryData error: ' + e.toString());
-    return new AppError(
-      "시계열 데이터 로드 중 오류 발생: " + e.message,
-      "HISTORY_DATA_LOAD_FAILED",
-      { originalError: e.toString() }
-    ).toJSON();
-  }
-}
-
 // ┌──────────────────────────────────────────────────┐
 // │  상환스케줄 데이터                                │
 // └──────────────────────────────────────────────────┘
@@ -686,120 +514,6 @@ function getVersionHistory() {
       "VERSION_HISTORY_FAILED",
       { originalError: e.toString() }
     ).toJSON();
-  }
-}
-
-// ┌──────────────────────────────────────────────────┐
-// │  관리자 관리                                      │
-// └──────────────────────────────────────────────────┘
-
-function addAdmin(email) {
-  verifyAdminPermission();
-
-  try {
-    const normalizedEmail = String(email).trim().toLowerCase();
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!normalizedEmail || !emailRegex.test(normalizedEmail)) {
-      return {
-        success: false,
-        message: "유효한 이메일 주소를 입력해주세요."
-      };
-    }
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(ADMIN_SHEET_NAME);
-
-    if (!sheet) {
-      throw new AppError(
-        "설정 시트를 찾을 수 없습니다.",
-        "SHEET_NOT_FOUND",
-        { sheetName: ADMIN_SHEET_NAME }
-      );
-    }
-
-    const conf = getAppConfig();
-    if (conf.admins.includes(normalizedEmail)) {
-      return {
-        success: false,
-        message: "이미 등록된 관리자입니다."
-      };
-    }
-
-    const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow + 1, 1).setValue(normalizedEmail);
-
-    logActivity('addAdmin', { email: normalizedEmail });
-
-    return {
-      success: true,
-      message: normalizedEmail + "이(가) 관리자로 추가되었습니다."
-    };
-  } catch (e) {
-    if (e instanceof AppError) return e.toJSON();
-    Logger.log('addAdmin error: ' + e.toString());
-    return {
-      success: false,
-      message: "관리자 추가 실패: " + e.message
-    };
-  }
-}
-
-function addAllowedFilter(filterName) {
-  verifyAdminPermission();
-
-  try {
-    const normalizedFilter = String(filterName).trim();
-
-    if (!normalizedFilter) {
-      return {
-        success: false,
-        message: "필터 이름을 입력해주세요."
-      };
-    }
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(ADMIN_SHEET_NAME);
-
-    if (!sheet) {
-      throw new AppError(
-        "설정 시트를 찾을 수 없습니다.",
-        "SHEET_NOT_FOUND",
-        { sheetName: ADMIN_SHEET_NAME }
-      );
-    }
-
-    const conf = getAppConfig();
-    if (conf.allowedFilters.includes(normalizedFilter)) {
-      return {
-        success: false,
-        message: "이미 등록된 필터입니다."
-      };
-    }
-
-    const filterRange = sheet.getRange("C:C").getValues();
-    let lastFilterRow = 1;
-    for (let i = 0; i < filterRange.length; i++) {
-      if (filterRange[i][0] && String(filterRange[i][0]).trim() !== '') {
-        lastFilterRow = i + 1;
-      }
-    }
-
-    sheet.getRange(lastFilterRow + 1, 3).setValue(normalizedFilter);
-
-    logActivity('addAllowedFilter', { filter: normalizedFilter });
-
-    return {
-      success: true,
-      message: normalizedFilter + " 필터가 추가되었습니다."
-    };
-  } catch (e) {
-    if (e instanceof AppError) return e.toJSON();
-    Logger.log('addAllowedFilter error: ' + e.toString());
-    return {
-      success: false,
-      message: "필터 추가 실패: " + e.message
-    };
   }
 }
 

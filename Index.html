@@ -173,7 +173,6 @@
         .step-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .admin-only { display: none !important; }
-        .visible-admin { display: inline-flex !important; }
 
         .card {
             background: var(--bg-card);
@@ -335,9 +334,13 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
-                    <button onclick="AppController.fetchData(true)" id="refreshBtn"
+                    <button onclick="AppController.fetchData()" id="refreshBtn"
                         class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all flex items-center gap-2">
                         <i class="fas fa-sync-alt"></i> <span class="hidden md:inline">새로고침</span>
+                    </button>
+                    <button onclick="CSVExporter.download()"
+                        class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all flex items-center gap-2">
+                        <i class="fas fa-download"></i> <span class="hidden md:inline">CSV 내려받기</span>
                     </button>
                 </div>
             </header>
@@ -750,7 +753,7 @@
             data: { raw: [], filtered: [], columns: [], history: [] },
             filters: { active: {}, allowed: [] },
             user: { email: '', isAdmin: false },
-            ui: { currentStep: 0, selectedDeal: null },
+            ui: { currentStep: 0 },
             versionHistory: null,   // fetchData() 시 캐싱
             scheduleData: null,     // fetchData() 시 캐싱
             observers: [],
@@ -983,22 +986,23 @@
             displayCols: ['DEAL', '차입처', '통화', 'FROM', 'TO', '당월잔액', '적용율'],
 
             // 다중 정렬 순서 배열 — [{ col, dir }] 순서대로 우선순위
+            // 먼저 클릭한 컬럼이 index 0 (최고 우선순위), 나중 클릭은 타이브레이커
             // dir: 'asc' → 'desc' → 제거 (3단계 토글)
             sortOrder: [],
+            _headerSortable: null,   // Sortable 인스턴스 누적 방지용
 
             // 컬럼 클릭 시 3단계 토글
-            // 정렬 없음 → asc → desc → 제거
+            // 새 컬럼 → 가장 낮은 우선순위(뒤)로 추가 (타이브레이커)
+            // 이미 정렬 중인 컬럼 → asc → desc → 제거
             toggleSort(col) {
                 const idx = this.sortOrder.findIndex(s => s.col === col);
 
                 if (idx === -1) {
-                    // 새 컬럼: 오름차순으로 추가
+                    // 새 컬럼: 맨 뒤(타이브레이커)로 추가
                     this.sortOrder.push({ col, dir: 'asc' });
                 } else if (this.sortOrder[idx].dir === 'asc') {
-                    // 오름차순 → 내림차순
                     this.sortOrder[idx].dir = 'desc';
                 } else {
-                    // 내림차순 → 취소 (배열에서 제거)
                     this.sortOrder.splice(idx, 1);
                 }
 
@@ -1010,25 +1014,34 @@
             getSortedData(data) {
                 if (this.sortOrder.length === 0) return data;
 
+                const DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+
                 return [...data].sort((a, b) => {
                     for (const { col, dir } of this.sortOrder) {
-                        let aVal = a[col];
-                        let bVal = b[col];
+                        const aStr = String(a[col] ?? '');
+                        const bStr = String(b[col] ?? '');
+
+                        // 날짜 형식(YYYY-MM-DD) 우선 처리
+                        // parseFloat("2025-05-20") = 2025 로 잘못 파싱되는 버그 방지
+                        if (DATE_RE.test(aStr) && DATE_RE.test(bStr)) {
+                            if (aStr < bStr) return dir === 'asc' ? -1 : 1;
+                            if (aStr > bStr) return dir === 'asc' ? 1 : -1;
+                            continue;
+                        }
 
                         // 숫자형 비교
-                        const aNum = parseFloat(String(aVal).replace(/,/g, ''));
-                        const bNum = parseFloat(String(bVal).replace(/,/g, ''));
+                        const aNum = parseFloat(aStr.replace(/,/g, ''));
+                        const bNum = parseFloat(bStr.replace(/,/g, ''));
                         if (!isNaN(aNum) && !isNaN(bNum)) {
                             if (aNum !== bNum) return dir === 'asc' ? aNum - bNum : bNum - aNum;
-                            continue; // 같으면 다음 기준으로
+                            continue;
                         }
 
                         // 문자열 비교
-                        aVal = String(aVal || '').toLowerCase();
-                        bVal = String(bVal || '').toLowerCase();
-                        if (aVal < bVal) return dir === 'asc' ? -1 : 1;
-                        if (aVal > bVal) return dir === 'asc' ? 1 : -1;
-                        // 같으면 다음 기준으로
+                        const aLow = aStr.toLowerCase();
+                        const bLow = bStr.toLowerCase();
+                        if (aLow < bLow) return dir === 'asc' ? -1 : 1;
+                        if (aLow > bLow) return dir === 'asc' ? 1 : -1;
                     }
                     return 0;
                 });
@@ -1100,9 +1113,17 @@
 
                 thead.appendChild(tr);
 
-                new Sortable(tr, {
+                // 이전 인스턴스 반드시 제거 — 없으면 클릭마다 누적되어 click 이벤트 가로챔
+                if (this._headerSortable) {
+                    this._headerSortable.destroy();
+                    this._headerSortable = null;
+                }
+
+                this._headerSortable = new Sortable(tr, {
                     group: 'filters',
                     animation: 150,
+                    delay: 150,           // 150ms 이상 눌러야 drag 시작 → 단순 클릭은 통과
+                    delayOnTouchOnly: false,
                     onAdd: (evt) => {
                         const item = evt.item;
                         const newCol = item.getAttribute('data-col');
@@ -1554,6 +1575,62 @@
         };
 
         // ┌──────────────────────────────────────────────────┐
+        // │  CSV 내려받기                                     │
+        // └──────────────────────────────────────────────────┘
+
+        const CSVExporter = {
+            download() {
+                const data = TableRenderer.getSortedData(AppState.data.filtered);
+
+                if (data.length === 0) {
+                    Utils.showToast('내려받을 데이터가 없습니다.', 'warning');
+                    return;
+                }
+
+                const cols = TableRenderer.displayCols;
+
+                // 헤더 행
+                const header = cols.map(col => `"${col}"`).join(',');
+
+                // 데이터 행 — 숫자/퍼센트 포맷 그대로 적용
+                const rows = data.map(d => {
+                    return cols.map(col => {
+                        let val = d[col] !== undefined ? d[col] : '';
+
+                        if (col.includes('잔액') || col.includes('금액')) {
+                            val = typeof val === 'number' ? val : val;
+                        } else if (col.includes('율')) {
+                            val = typeof val === 'number' ? (val * 100).toFixed(2) + '%' : val;
+                        }
+
+                        // 쉼표·줄바꿈·따옴표 포함 시 따옴표로 감싸기
+                        const str = String(val);
+                        if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+                            return `"${str.replace(/"/g, '""')}"`;
+                        }
+                        return str;
+                    }).join(',');
+                });
+
+                const csvContent = '\uFEFF' + [header, ...rows].join('\n'); // BOM 추가 (엑셀 한글 깨짐 방지)
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+
+                const now = new Date();
+                const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+                const filename = `차입금_${timestamp}.csv`;
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                Utils.showToast(`${data.length}건 CSV 저장 완료`, 'success');
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
         // │  메인 앱 컨트롤러                                 │
         // └──────────────────────────────────────────────────┘
 
@@ -1592,7 +1669,7 @@
                     this.goStep(0);
                 } else {
                     badge.innerHTML = '<i class="fas fa-user text-slate-400 mr-1"></i> Viewer';
-                    this.fetchData(true);
+                    this.fetchData();
                 }
             },
 
@@ -1616,7 +1693,7 @@
                 if (n === 3) VersionHistory.load();
             },
 
-            async fetchData(autoStart = false) {
+            async fetchData() {
                 LoadingManager.show('데이터를 불러오는 중...');
 
                 try {
