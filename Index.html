@@ -1504,6 +1504,23 @@
         // └──────────────────────────────────────────────────┘
 
         const VersionHistory = {
+            // 카테고리별 색상 정의
+            CATEGORY_STYLES: {
+                '기능추가':  { style: 'background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.5);color:#93c5fd;',  icon: 'fa-plus-circle' },
+                '버그수정':  { style: 'background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.5);color:#fca5a5;',   icon: 'fa-bug' },
+                '데이터변경':{ style: 'background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.5);color:#fcd34d;', icon: 'fa-database' },
+                '개선':      { style: 'background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.5);color:#6ee7b7;', icon: 'fa-arrow-up' },
+            },
+
+            getCategoryBadge(category) {
+                if (!category) return '';
+                // 대괄호 유무 상관없이 매칭: "[기능추가]" → "기능추가"
+                const key = category.replace(/^\[|\]$/g, '').trim();
+                const s = this.CATEGORY_STYLES[key];
+                const baseStyle = 'font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;margin-bottom:4px;';
+                if (!s) return `<span style="${baseStyle}background:rgba(100,116,139,0.3);border:1px solid rgba(100,116,139,0.5);color:#94a3b8;">${Utils.escapeHtml(key || category)}</span>`;
+                return `<span style="${baseStyle}${s.style}"><i class="fas ${s.icon}"></i> ${Utils.escapeHtml(key)}</span>`;
+            },
             // 탭 진입 시 캐시된 데이터로 렌더링 (캐시 없으면 새로 호출)
             async load() {
                 const result = AppState.versionHistory
@@ -1554,6 +1571,7 @@
                 container.innerHTML = reversed.map((v, i) => {
                     const isLatest = i === 0;
                     const isLast = i === reversed.length - 1;
+                    const badge = this.getCategoryBadge(v.category);
 
                     return `
                         <div class="flex gap-4 items-start">
@@ -1565,6 +1583,7 @@
                                 ${!isLast ? '<div class="version-timeline-line"></div>' : ''}
                             </div>
                             <div class="pb-5 flex-1 min-w-0">
+                                ${badge}
                                 <p class="text-sm text-slate-200 leading-relaxed break-words">${Utils.escapeHtml(v.description)}</p>
                                 ${isLatest ? '<span class="text-[10px] font-bold text-violet-400 bg-violet-400/10 border border-violet-400/30 px-2 py-0.5 rounded mt-1.5 inline-block">LATEST</span>' : ''}
                             </div>

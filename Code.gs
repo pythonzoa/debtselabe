@@ -487,19 +487,20 @@ function getVersionHistory() {
       return { header: '버전 히스토리', versions: [] };
     }
 
-    // T열 전체 읽기 (20번째 열 = T열)
-    const range = sheet.getRange(1, 20, lastRow, 1);
+    // S열(19번째, 카테고리)과 T열(20번째, 설명) 동시 읽기
+    const range = sheet.getRange(1, 19, lastRow, 2);
     const values = range.getDisplayValues();
 
     // T1 셀을 헤더명으로 사용 (비어있으면 기본값)
-    const header = String(values[0][0] || '').trim() || '버전 히스토리';
+    const header = String(values[0][1] || '').trim() || '버전 히스토리';
 
     // T2부터 내용, 빈 행 제외
     const versions = values
       .slice(1)
       .map((row, i) => ({
         index: i + 1,
-        description: String(row[0] || '').trim()
+        category: String(row[0] || '').trim(),   // S열: [기능추가] 등
+        description: String(row[1] || '').trim() // T열: 설명
       }))
       .filter(v => v.description !== '');
 
