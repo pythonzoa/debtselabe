@@ -498,20 +498,62 @@
 
             <!-- VIEW 3: Version History -->
             <div id="step-3" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-3">
-                <div class="card p-6 border-l-4 border-l-violet-500">
-                    <div class="flex justify-between items-center mb-6">
-                        <div>
-                            <h3 class="font-bold text-lg text-white" id="versionTitle">버전 히스토리</h3>
-                            <p class="text-xs text-slate-400 mt-1">시스템 변경 이력입니다.</p>
+                <div class="grid grid-cols-1 gap-6" style="grid-template-columns: 2fr 1fr;">
+
+                    <!-- 버전 히스토리 -->
+                    <div class="card p-6 border-l-4 border-l-violet-500">
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 class="font-bold text-lg text-white" id="versionTitle">버전 히스토리</h3>
+                                <p class="text-xs text-slate-400 mt-1">시스템 변경 이력입니다.</p>
+                            </div>
+                            <button onclick="VersionHistory.reload()"
+                                class="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all flex items-center gap-1">
+                                <i class="fas fa-sync-alt"></i> 새로고침
+                            </button>
                         </div>
-                        <button onclick="VersionHistory.reload()"
-                            class="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all flex items-center gap-1">
-                            <i class="fas fa-sync-alt"></i> 새로고침
-                        </button>
+                        <div id="versionList" class="space-y-1">
+                            <p class="text-slate-500 text-sm text-center py-8">데이터를 먼저 불러와 주세요.</p>
+                        </div>
                     </div>
-                    <div id="versionList" class="space-y-1">
-                        <p class="text-slate-500 text-sm text-center py-8">데이터를 먼저 불러와 주세요.</p>
+
+                    <!-- 피드백 (Admin 전용) -->
+                    <div class="admin-only card p-6 border-l-4 border-l-emerald-500 flex flex-col gap-4">
+                        <div>
+                            <h3 class="font-bold text-lg text-white">의견 남기기</h3>
+                            <p class="text-xs text-slate-400 mt-1">개선 사항, 버그, 요청 사항을 자유롭게 남겨주세요.</p>
+                        </div>
+
+                        <!-- 입력 폼 -->
+                        <div class="flex flex-col gap-2">
+                            <textarea id="feedbackInput"
+                                placeholder="의견을 입력하세요... (최대 500자)"
+                                maxlength="500"
+                                rows="4"
+                                class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-emerald-500 transition-colors"></textarea>
+                            <div class="flex justify-between items-center">
+                                <span id="feedbackCharCount" class="text-xs text-slate-500">0 / 500</span>
+                                <button onclick="FeedbackManager.submit()"
+                                    id="feedbackSubmitBtn"
+                                    class="px-4 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all flex items-center gap-1.5">
+                                    <i class="fas fa-paper-plane"></i> 제출
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 피드백 목록 -->
+                        <div class="flex justify-between items-center border-t border-slate-700 pt-3">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">접수된 의견</span>
+                            <button onclick="FeedbackManager.load()"
+                                class="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1">
+                                <i class="fas fa-sync-alt text-[10px]"></i> 새로고침
+                            </button>
+                        </div>
+                        <div id="feedbackList" class="flex flex-col gap-3 overflow-y-auto" style="max-height:360px;">
+                            <p class="text-slate-500 text-xs text-center py-4">불러오는 중...</p>
+                        </div>
                     </div>
+
                 </div>
             </div>
 
@@ -706,12 +748,50 @@
                         setTimeout(() => resolve({
                             header: '버전 히스토리',
                             versions: [
-                                { index: 1, description: 'v1.0 (2023-06-01) - 초기 배포. Google Sheets 데이터 테이블 조회, 기본 드롭다운 필터' },
-                                { index: 2, description: 'v1.1 (2023-09-15) - 컬럼 드래그앤드롭 순서 변경, 필터 프리셋 저장/불러오기 추가' },
-                                { index: 3, description: 'v2.0 (2024-01-10) - 분석 대시보드 도입. KPI 카드 4종, 차트 3종(금융기관별/통화별/만기구조) 추가' },
-                                { index: 4, description: 'v2.1 (2024-04-22) - 상세 카드(DEAL 클릭) 추가, 모바일 반응형 레이아웃 개선' },
-                                { index: 5, description: 'v3.0 (2024-09-01) - 관리자 권한 분리, 스냅샷 발행 구조 도입, 데이터 무결성 검증 탭 추가' },
-                                { index: 6, description: 'v3.1 (2025-02-21) - 버전 히스토리 탭 추가, 데이터 로드 시 버전 히스토리 동시 캐싱' },
+                                { index: 1, category: '기능추가', description: 'v1.0 (2023-06-01) - 초기 배포. Google Sheets 데이터 테이블 조회, 기본 드롭다운 필터' },
+                                { index: 2, category: '개선',    description: 'v1.1 (2023-09-15) - 컬럼 드래그앤드롭 순서 변경, 필터 프리셋 저장/불러오기 추가' },
+                                { index: 3, category: '기능추가', description: 'v2.0 (2024-01-10) - 분석 대시보드 도입. KPI 카드 4종, 차트 3종(금융기관별/통화별/만기구조) 추가' },
+                                { index: 4, category: '개선',    description: 'v2.1 (2024-04-22) - 상세 카드(DEAL 클릭) 추가, 모바일 반응형 레이아웃 개선' },
+                                { index: 5, category: '기능추가', description: 'v3.0 (2024-09-01) - 관리자 권한 분리, 스냅샷 발행 구조 도입, 데이터 무결성 검증 탭 추가' },
+                                { index: 6, category: '기능추가', description: 'v3.1 (2025-02-21) - 버전 히스토리 탭 추가, 데이터 로드 시 버전 히스토리 동시 캐싱' },
+                            ]
+                        }), 300);
+                    }
+                });
+            },
+
+            async submitFeedback(content) {
+                return new Promise((resolve, reject) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .submitFeedback(content);
+                    } else {
+                        setTimeout(() => resolve({
+                            success: true,
+                            feedback: {
+                                date: new Date().toLocaleString('ko-KR'),
+                                author: 'test@test.com',
+                                content
+                            }
+                        }), 300);
+                    }
+                });
+            },
+
+            async getFeedback() {
+                return new Promise((resolve, reject) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getFeedback();
+                    } else {
+                        setTimeout(() => resolve({
+                            feedbacks: [
+                                { index: 1, date: '2025. 2. 20. 오전 9:00:00', author: 'admin@test.com', content: '차트에서 특정 DEAL 클릭 시 하이라이트 기능이 있으면 좋겠습니다.' },
+                                { index: 2, date: '2025. 2. 22. 오후 2:30:00', author: 'admin@test.com', content: '필터 초기화 버튼 추가 요청합니다.' },
                             ]
                         }), 300);
                     }
@@ -1594,6 +1674,92 @@
         };
 
         // ┌──────────────────────────────────────────────────┐
+        // │  피드백 매니저                                    │
+        // └──────────────────────────────────────────────────┘
+
+        const FeedbackManager = {
+            _loaded: false,
+
+            init() {
+                const input = document.getElementById('feedbackInput');
+                if (!input) return;
+                input.addEventListener('input', () => {
+                    const len = input.value.length;
+                    const counter = document.getElementById('feedbackCharCount');
+                    counter.textContent = `${len} / 500`;
+                    counter.style.color = len > 450 ? '#f87171' : '';
+                });
+            },
+
+            async load() {
+                const list = document.getElementById('feedbackList');
+                if (!list) return;
+                list.innerHTML = '<p class="text-slate-500 text-xs text-center py-4"><i class="fas fa-spinner fa-spin mr-1"></i>불러오는 중...</p>';
+
+                try {
+                    const res = await DataService.getFeedback();
+                    if (res.error) throw new Error(res.error);
+                    this._loaded = true;
+                    this.render(res.feedbacks || []);
+                } catch (e) {
+                    list.innerHTML = `<p class="text-red-400 text-xs text-center py-4">${Utils.escapeHtml(e.message || '오류가 발생했습니다.')}</p>`;
+                }
+            },
+
+            render(feedbacks) {
+                const list = document.getElementById('feedbackList');
+                if (!list) return;
+
+                if (feedbacks.length === 0) {
+                    list.innerHTML = '<p class="text-slate-500 text-xs text-center py-4">아직 접수된 의견이 없습니다.</p>';
+                    return;
+                }
+
+                // 최신순
+                list.innerHTML = [...feedbacks].reverse().map(f => `
+                    <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex flex-col gap-1.5">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[11px] font-bold text-emerald-400">
+                                <i class="fas fa-user-circle mr-1"></i>${Utils.escapeHtml(f.author)}
+                            </span>
+                            <span class="text-[10px] text-slate-500">${Utils.escapeHtml(f.date)}</span>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap break-words">${Utils.escapeHtml(f.content)}</p>
+                    </div>
+                `).join('');
+            },
+
+            async submit() {
+                const input = document.getElementById('feedbackInput');
+                const btn   = document.getElementById('feedbackSubmitBtn');
+                if (!input || !btn) return;
+
+                const text = input.value.trim();
+                if (!text) { Utils.showToast('내용을 입력해주세요.', 'error'); return; }
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 제출 중...';
+
+                try {
+                    const res = await DataService.submitFeedback(text);
+                    if (!res.success) throw new Error(res.message || '제출 실패');
+
+                    input.value = '';
+                    document.getElementById('feedbackCharCount').textContent = '0 / 500';
+                    Utils.showToast('의견이 제출되었습니다.', 'success');
+
+                    // 목록에 즉시 prepend
+                    await this.load();
+                } catch (e) {
+                    Utils.showToast(e.message || '오류가 발생했습니다.', 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> 제출';
+                }
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
         // │  CSV 내려받기                                     │
         // └──────────────────────────────────────────────────┘
 
@@ -1659,6 +1825,7 @@
                     AppState.init();
                     FilterPresets.init();
                     ChartManager.init();
+                    FeedbackManager.init();
 
                     const user = await DataService.getUserPermission();
                     this.initUser(user);
@@ -1709,7 +1876,10 @@
                 AppState.ui.currentStep = n;
 
                 if (n === 1) ValidationRenderer.render(AppState.validation);
-                if (n === 3) VersionHistory.load();
+                if (n === 3) {
+                    VersionHistory.load();
+                    if (AppState.user.isAdmin) FeedbackManager.load();
+                }
             },
 
             async fetchData() {

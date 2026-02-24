@@ -519,6 +519,110 @@ function getVersionHistory() {
 }
 
 // ┌──────────────────────────────────────────────────┐
+// │  피드백                                           │
+// └──────────────────────────────────────────────────┘
+
+/**
+ * 피드백 제출 (Admin 전용)
+ * __ADMIN_CONFIG__ V열(날짜), W열(작성자), X열(내용)
+ */
+function submitFeedback(content) {
+  verifyAdminPermission();
+
+  try {
+    const text = String(content || '').trim();
+    if (!text) {
+      return { success: false, message: '내용을 입력해주세요.' };
+    }
+    if (text.length > 500) {
+      return { success: false, message: '500자 이내로 입력해주세요.' };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(ADMIN_SHEET_NAME);
+    if (!sheet) {
+      throw new AppError('설정 시트를 찾을 수 없습니다.', 'SHEET_NOT_FOUND', { sheetName: ADMIN_SHEET_NAME });
+    }
+
+    const now = new Date();
+    const email = Session.getEffectiveUser().getEmail();
+    const lastRow = Math.max(sheet.getLastRow(), 1);
+
+    // V열(22), W열(23), X열(24)에 한 행 추가
+    sheet.getRange(lastRow + 1, 22, 1, 3).setValues([[
+      now.toLocaleString('ko-KR'),
+      email,
+      text
+    ]]);
+
+    // V1~X1 헤더가 없으면 세팅
+    if (sheet.getRange(1, 22).getValue() === '') {
+      sheet.getRange(1, 22).setValue('피드백_날짜').setFontWeight('bold').setBackground('#cfe2f3');
+      sheet.getRange(1, 23).setValue('피드백_작성자').setFontWeight('bold').setBackground('#cfe2f3');
+      sheet.getRange(1, 24).setValue('피드백_내용').setFontWeight('bold').setBackground('#cfe2f3');
+      sheet.setColumnWidth(22, 160);
+      sheet.setColumnWidth(23, 200);
+      sheet.setColumnWidth(24, 400);
+    }
+
+    logActivity('submitFeedback', { email, length: text.length });
+
+    return {
+      success: true,
+      feedback: {
+        date: now.toLocaleString('ko-KR'),
+        author: email,
+        content: text
+      }
+    };
+  } catch (e) {
+    if (e instanceof AppError) return e.toJSON();
+    Logger.log('submitFeedback error: ' + e.toString());
+    return { success: false, message: '피드백 저장 실패: ' + e.message };
+  }
+}
+
+/**
+ * 피드백 목록 조회 (Admin 전용)
+ * @returns {Object} { feedbacks: Array<{date, author, content}> }
+ */
+function getFeedback() {
+  verifyAdminPermission();
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(ADMIN_SHEET_NAME);
+    if (!sheet) {
+      throw new AppError('설정 시트를 찾을 수 없습니다.', 'SHEET_NOT_FOUND', { sheetName: ADMIN_SHEET_NAME });
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { feedbacks: [] };
+
+    const values = sheet.getRange(2, 22, lastRow - 1, 3).getDisplayValues();
+
+    const feedbacks = values
+      .map((row, i) => ({
+        index: i + 1,
+        date: String(row[0] || '').trim(),
+        author: String(row[1] || '').trim(),
+        content: String(row[2] || '').trim()
+      }))
+      .filter(f => f.content !== '');
+
+    return { feedbacks };
+  } catch (e) {
+    if (e instanceof AppError) return e.toJSON();
+    Logger.log('getFeedback error: ' + e.toString());
+    return new AppError(
+      '피드백 조회 실패: ' + e.message,
+      'FEEDBACK_LOAD_FAILED',
+      { originalError: e.toString() }
+    ).toJSON();
+  }
+}
+
+// ┌──────────────────────────────────────────────────┐
 // │  활동 로그                                        │
 // └──────────────────────────────────────────────────┘
 
