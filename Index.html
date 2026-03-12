@@ -517,8 +517,8 @@
                         </div>
                     </div>
 
-                    <!-- 피드백 (Admin 전용) -->
-                    <div class="admin-only card p-6 border-l-4 border-l-emerald-500 flex flex-col gap-4">
+                    <!-- 피드백 -->
+                    <div class="card p-6 border-l-4 border-l-emerald-500 flex flex-col gap-4">
                         <div>
                             <h3 class="font-bold text-lg text-white">의견 남기기</h3>
                             <p class="text-xs text-slate-400 mt-1">개선 사항, 버그, 요청 사항을 자유롭게 남겨주세요.</p>
@@ -542,16 +542,19 @@
                         </div>
 
                         <!-- 피드백 목록 -->
-                        <div class="flex justify-between items-center border-t border-slate-700 pt-3">
-                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">접수된 의견</span>
-                            <button onclick="FeedbackManager.load()"
-                                class="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1">
-                                <i class="fas fa-sync-alt text-[10px]"></i> 새로고침
-                            </button>
+                        <div class="flex flex-col gap-3">
+                            <div class="flex justify-between items-center border-t border-slate-700 pt-3">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">접수된 의견</span>
+                                <button onclick="FeedbackManager.load()"
+                                    class="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1">
+                                    <i class="fas fa-sync-alt text-[10px]"></i> 새로고침
+                                </button>
+                            </div>
+                            <div id="feedbackList" class="flex flex-col gap-3 overflow-y-auto" style="max-height:360px;">
+                                <p class="text-slate-500 text-xs text-center py-4">불러오는 중...</p>
+                            </div>
                         </div>
-                        <div id="feedbackList" class="flex flex-col gap-3 overflow-y-auto" style="max-height:360px;">
-                            <p class="text-slate-500 text-xs text-center py-4">불러오는 중...</p>
-                        </div>
+
                     </div>
 
                 </div>
@@ -1706,6 +1709,13 @@
                 }
             },
 
+            // 의견마다 랜덤 닉네임 생성
+            _nickname() {
+                const adj  = ['용감한','조용한','빠른','신중한','활발한','차분한','영리한','든든한','재빠른','따뜻한'];
+                const noun = ['독수리','호랑이','돌고래','여우','판다','늑대','매','사자','토끼','부엉이'];
+                return adj[Math.floor(Math.random() * adj.length)] + ' ' + noun[Math.floor(Math.random() * noun.length)];
+            },
+
             render(feedbacks) {
                 const list = document.getElementById('feedbackList');
                 if (!list) return;
@@ -1720,7 +1730,7 @@
                     <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3 flex flex-col gap-1.5">
                         <div class="flex justify-between items-center">
                             <span class="text-[11px] font-bold text-emerald-400">
-                                <i class="fas fa-user-circle mr-1"></i>${Utils.escapeHtml(f.author)}
+                                <i class="fas fa-user-circle mr-1"></i>${Utils.escapeHtml(this._nickname())}
                             </span>
                             <span class="text-[10px] text-slate-500">${Utils.escapeHtml(f.date)}</span>
                         </div>
@@ -1850,7 +1860,6 @@
                     badge.className = "px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800 text-[10px]";
                     document.querySelectorAll('.admin-only').forEach(el => {
                         el.classList.remove('admin-only');
-                        el.style.display = 'inline-block';
                     });
                     this.goStep(0);
                 } else {
@@ -1878,7 +1887,7 @@
                 if (n === 1) ValidationRenderer.render(AppState.validation);
                 if (n === 3) {
                     VersionHistory.load();
-                    if (AppState.user.isAdmin) FeedbackManager.load();
+                    FeedbackManager.load();
                 }
             },
 

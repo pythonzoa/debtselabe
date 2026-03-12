@@ -527,8 +527,6 @@ function getVersionHistory() {
  * __ADMIN_CONFIG__ V열(날짜), W열(작성자), X열(내용)
  */
 function submitFeedback(content) {
-  verifyAdminPermission();
-
   try {
     const text = String(content || '').trim();
     if (!text) {
@@ -546,16 +544,8 @@ function submitFeedback(content) {
 
     const now = new Date();
     const email = Session.getEffectiveUser().getEmail();
-    const lastRow = Math.max(sheet.getLastRow(), 1);
 
-    // V열(22), W열(23), X열(24)에 한 행 추가
-    sheet.getRange(lastRow + 1, 22, 1, 3).setValues([[
-      now.toLocaleString('ko-KR'),
-      email,
-      text
-    ]]);
-
-    // V1~X1 헤더가 없으면 세팅
+    // V1 헤더가 없으면 먼저 세팅
     if (sheet.getRange(1, 22).getValue() === '') {
       sheet.getRange(1, 22).setValue('피드백_날짜').setFontWeight('bold').setBackground('#cfe2f3');
       sheet.getRange(1, 23).setValue('피드백_작성자').setFontWeight('bold').setBackground('#cfe2f3');
@@ -564,6 +554,20 @@ function submitFeedback(content) {
       sheet.setColumnWidth(23, 200);
       sheet.setColumnWidth(24, 400);
     }
+
+    // V열(22번째) 기준으로 마지막 데이터 행 탐색 → 항상 V2부터 쌓임
+    const vValues = sheet.getRange(1, 22, sheet.getMaxRows(), 1).getValues();
+    let vLastRow = 1;
+    for (let i = 0; i < vValues.length; i++) {
+      if (String(vValues[i][0]).trim() !== '') vLastRow = i + 1;
+    }
+
+    // V열 다음 빈 행에 데이터 추가
+    sheet.getRange(vLastRow + 1, 22, 1, 3).setValues([[
+      now.toLocaleString('ko-KR'),
+      email,
+      text
+    ]]);
 
     logActivity('submitFeedback', { email, length: text.length });
 
@@ -587,8 +591,6 @@ function submitFeedback(content) {
  * @returns {Object} { feedbacks: Array<{date, author, content}> }
  */
 function getFeedback() {
-  verifyAdminPermission();
-
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(ADMIN_SHEET_NAME);
@@ -599,7 +601,15 @@ function getFeedback() {
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return { feedbacks: [] };
 
-    const values = sheet.getRange(2, 22, lastRow - 1, 3).getDisplayValues();
+    // V열(22번째) 기준으로 실제 마지막 행 탐색
+    const vValues = sheet.getRange(1, 22, sheet.getMaxRows(), 1).getValues();
+    let vLastRow = 1;
+    for (let i = 0; i < vValues.length; i++) {
+      if (String(vValues[i][0]).trim() !== '') vLastRow = i + 1;
+    }
+    if (vLastRow < 2) return { feedbacks: [] };
+
+    const values = sheet.getRange(2, 22, vLastRow - 1, 3).getDisplayValues();
 
     const feedbacks = values
       .map((row, i) => ({
