@@ -91,6 +91,69 @@
             border-color: var(--accent-blue);
         }
 
+        /* OR 그룹 */
+        .filter-group {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .filter-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
+            background: rgba(30,41,59,0.8);
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+        }
+        .filter-group-header .del-group-btn {
+            font-size: 10px;
+            color: #64748b;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: .15s;
+        }
+        .filter-group-header .del-group-btn:hover { color: #f87171; background: rgba(248,113,113,.1); }
+
+        .or-divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 6px 0;
+            color: #f59e0b;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+        .or-divider::before, .or-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(245,158,11,.3);
+        }
+
+        .add-or-btn {
+            width: 100%;
+            margin-top: 6px;
+            padding: 6px;
+            border: 1px dashed rgba(245,158,11,.4);
+            border-radius: 8px;
+            background: transparent;
+            color: #f59e0b;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: .2s;
+        }
+        .add-or-btn:hover { background: rgba(245,158,11,.08); border-color: #f59e0b; }
+
         .filter-widget {
             background: #1e293b;
             border: 1px solid var(--accent-blue);
@@ -98,7 +161,6 @@
             padding: 8px 12px;
             min-width: 160px;
             position: relative;
-            cursor: grab;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         }
 
@@ -108,7 +170,8 @@
             font-weight: 700;
             display: block;
             margin-bottom: 4px;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: grab;
         }
 
         .filter-widget select {
@@ -146,6 +209,59 @@
         }
 
         .filter-widget:hover .remove-btn { opacity: 1; }
+
+        /* 다중선택 드롭다운 */
+        .ms-trigger {
+            width: 100%;
+            background: transparent;
+            color: white;
+            font-size: 12px;
+            border: none;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 4px;
+            padding-right: 14px;
+            outline: none;
+            cursor: pointer;
+            text-align: left;
+            position: relative;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ms-trigger::after {
+            content: '▾';
+            position: absolute;
+            right: 0;
+            font-size: 10px;
+            color: var(--accent-blue);
+        }
+        .ms-dropdown {
+            display: none;
+            position: fixed;
+            background: #1e293b;
+            border: 1px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 4px 0;
+            z-index: 9999;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        }
+        .ms-dropdown.open { display: block; }
+        .ms-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #cbd5e1;
+            cursor: pointer;
+            transition: background .1s;
+            white-space: nowrap;
+        }
+        .ms-option:hover { background: rgba(59,130,246,0.15); }
+        .ms-option input[type=checkbox] { accent-color: var(--accent-blue); cursor: pointer; flex-shrink: 0; }
+        .ms-option.all-opt { color: #94a3b8; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
 
         .step-tabs {
             display: flex;
@@ -412,11 +528,7 @@
                             <i class="fas fa-undo"></i> 초기화
                         </button>
                     </div>
-                    <div id="activeFilters" class="drop-zone" role="region" aria-label="활성 필터 영역">
-                        <div class="text-slate-500 text-sm italic w-full text-center pointer-events-none mt-4 select-none" id="emptyMsg">
-                            우측 목록에서 필터 항목을 드래그하세요
-                        </div>
-                    </div>
+                    <div id="filterGroups"></div>
                 </div>
 
                 <!-- KPI -->
@@ -834,11 +946,11 @@
 
         const AppState = {
             data: { raw: [], filtered: [], columns: [], history: [] },
-            filters: { active: {}, allowed: [] },
+            filters: { groups: [{}], allowed: [] },  // groups: [{col:[vals]}, ...] — OR between groups, AND within
             user: { email: '', isAdmin: false },
             ui: { currentStep: 0 },
-            versionHistory: null,   // fetchData() 시 캐싱
-            scheduleData: null,     // fetchData() 시 캐싱
+            versionHistory: null,
+            scheduleData: null,
             observers: [],
 
             init() { this.loadFromStorage(); },
@@ -849,27 +961,37 @@
 
             setData(data) { this.data.raw = data; this.applyFilters(); },
 
-            setFilters(filters) { this.filters.active = filters; this.saveToStorage(); this.applyFilters(); },
+            setFilters(groups) { this.filters.groups = groups; this.saveToStorage(); this.applyFilters(); },
 
             applyFilters() {
-                this.data.filtered = this.data.raw.filter(d => {
-                    for (const [key, val] of Object.entries(this.filters.active)) {
-                        if (val && String(d[key]) !== val) return false;
-                    }
-                    return true;
-                });
+                const activeGroups = this.filters.groups.filter(g => Object.keys(g).length > 0);
+
+                if (activeGroups.length === 0) {
+                    this.data.filtered = [...this.data.raw];
+                } else {
+                    this.data.filtered = this.data.raw.filter(row => {
+                        // 그룹 간 OR
+                        return activeGroups.some(group => {
+                            // 그룹 내 AND
+                            return Object.entries(group).every(([col, vals]) => {
+                                if (!vals || (Array.isArray(vals) && vals.length === 0)) return true;
+                                return vals.includes(String(row[col]));
+                            });
+                        });
+                    });
+                }
                 this.notify();
             },
 
             saveToStorage() {
-                try { localStorage.setItem('appFilters', JSON.stringify(this.filters.active)); }
+                try { localStorage.setItem('appFilterGroups', JSON.stringify(this.filters.groups)); }
                 catch (e) { console.warn('Failed to save filters:', e); }
             },
 
             loadFromStorage() {
                 try {
-                    const saved = localStorage.getItem('appFilters');
-                    if (saved) this.filters.active = JSON.parse(saved);
+                    const saved = localStorage.getItem('appFilterGroups');
+                    if (saved) this.filters.groups = JSON.parse(saved);
                 } catch (e) { console.warn('Failed to load filters:', e); }
             }
         };
@@ -879,6 +1001,8 @@
         // └──────────────────────────────────────────────────┘
 
         const FilterManager = {
+            _sortables: [],
+
             init() {
                 const container = document.getElementById('filterSource');
                 container.innerHTML = '';
@@ -900,85 +1024,217 @@
 
                 new Sortable(container, { group: { name: 'filters', pull: 'clone', put: false }, sort: false, animation: 150 });
 
-                this.initDropZone();
+                this.renderGroups();
             },
 
-            initDropZone() {
-                const dropZone = document.getElementById('activeFilters');
+            renderGroups() {
+                const container = document.getElementById('filterGroups');
+                container.innerHTML = '';
+                this._sortables.forEach(s => s.destroy && s.destroy());
+                this._sortables = [];
 
-                new Sortable(dropZone, {
+                AppState.filters.groups.forEach((group, idx) => {
+                    if (idx > 0) {
+                        const div = Utils.createElement('div', { className: 'or-divider' });
+                        div.textContent = 'OR';
+                        container.appendChild(div);
+                    }
+                    container.appendChild(this._createGroupEl(group, idx));
+                });
+
+                const addBtn = Utils.createElement('button', { className: 'add-or-btn' });
+                addBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> OR 조건 추가';
+                addBtn.addEventListener('click', () => this.addGroup());
+                container.appendChild(addBtn);
+            },
+
+            _createGroupEl(group, idx) {
+                const groupEl = Utils.createElement('div', { className: 'filter-group', 'data-group': idx });
+
+                const header = Utils.createElement('div', { className: 'filter-group-header' });
+                header.innerHTML = `<span><i class="fas fa-layer-group mr-1"></i>조건 그룹 ${idx + 1}</span>`;
+                const delBtn = Utils.createElement('button', { className: 'del-group-btn' });
+                delBtn.innerHTML = '<i class="fas fa-times mr-1"></i>그룹 삭제';
+                delBtn.style.display = AppState.filters.groups.length > 1 ? '' : 'none';
+                delBtn.addEventListener('click', () => this.removeGroup(idx));
+                header.appendChild(delBtn);
+                groupEl.appendChild(header);
+
+                const zone = Utils.createElement('div', { className: 'drop-zone', 'data-group': idx, role: 'region' });
+
+                const emptyMsg = Utils.createElement('div', { className: 'text-slate-500 text-sm italic w-full text-center pointer-events-none mt-2 select-none' });
+                emptyMsg.textContent = '우측 목록에서 필터 항목을 드래그하세요';
+                zone.appendChild(emptyMsg);
+
+                Object.entries(group).forEach(([col, vals]) => {
+                    const w = this.createWidget(col, idx);
+                    zone.appendChild(w);
+                    emptyMsg.style.display = 'none';
+                    if (Array.isArray(vals) && vals.length > 0) {
+                        w.querySelectorAll('.ms-option:not(.all-opt) input[type=checkbox]').forEach(chk => {
+                            if (vals.includes(chk.value)) { chk.checked = true; chk.dispatchEvent(new Event('change')); }
+                        });
+                    }
+                });
+
+                groupEl.appendChild(zone);
+
+                const sortable = new Sortable(zone, {
                     group: 'filters',
                     animation: 150,
-                    filter: ".no-drag",
+                    handle: 'label',
+                    filter: '.no-drag',
                     preventOnFilter: false,
                     onAdd: (evt) => {
                         const item = evt.item;
                         const col = item.getAttribute('data-col');
-                        if (AppState.filters.active.hasOwnProperty(col)) { item.remove(); return; }
-                        item.replaceWith(this.createWidget(col));
-                        AppState.filters.active[col] = '';
-                        document.getElementById('emptyMsg').classList.add('hidden');
+                        if (AppState.filters.groups[idx] && AppState.filters.groups[idx].hasOwnProperty(col)) { item.remove(); return; }
+                        const widget = this.createWidget(col, idx);
+                        item.replaceWith(widget);
+                        if (!AppState.filters.groups[idx]) AppState.filters.groups[idx] = {};
+                        AppState.filters.groups[idx][col] = [];
+                        emptyMsg.style.display = 'none';
+                        AppState.applyFilters();
                     },
                     onRemove: (evt) => {
                         const col = evt.item.getAttribute('data-col');
-                        delete AppState.filters.active[col];
-                        if (Object.keys(AppState.filters.active).length === 0) {
-                            document.getElementById('emptyMsg').classList.remove('hidden');
-                        }
+                        if (AppState.filters.groups[idx]) delete AppState.filters.groups[idx][col];
+                        if (zone.querySelectorAll('.filter-widget').length === 0) emptyMsg.style.display = '';
                         AppState.applyFilters();
                     }
                 });
+                this._sortables.push(sortable);
+                return groupEl;
             },
 
-            createWidget(col) {
-                const wrapper = Utils.createElement('div', {
-                    className: 'filter-widget',
-                    'data-col': col,
-                    role: 'group',
-                    'aria-labelledby': `filter-label-${col}`
-                });
+            addGroup() {
+                AppState.filters.groups.push({});
+                this.renderGroups();
+            },
 
-                const label = Utils.createElement('label', { id: `filter-label-${col}`, textContent: col });
+            removeGroup(idx) {
+                AppState.filters.groups.splice(idx, 1);
+                if (AppState.filters.groups.length === 0) AppState.filters.groups = [{}];
+                this.renderGroups();
+                AppState.applyFilters();
+            },
+
+            createWidget(col, groupIdx) {
+                const wrapper = Utils.createElement('div', { className: 'filter-widget', 'data-col': col, role: 'group' });
+                const label = Utils.createElement('label', { textContent: col });
 
                 const values = [...new Set(AppState.data.raw.map(d => d[col]))]
                     .filter(v => v && String(v).trim() !== '').sort();
 
-                const select = Utils.createElement('select', { className: 'no-drag', 'aria-label': `${col} 필터 선택` });
-                select.appendChild(Utils.createElement('option', { value: '', textContent: '전체 (All)' }));
-                values.forEach(v => select.appendChild(Utils.createElement('option', { value: v, textContent: v })));
+                let selected = [];
 
-                select.addEventListener('change', (e) => {
-                    AppState.filters.active[col] = e.target.value;
+                const trigger = Utils.createElement('button', { className: 'ms-trigger no-drag' });
+                const updateTrigger = () => {
+                    trigger.textContent = selected.length === 0 ? '전체 (All)'
+                        : selected.length === 1 ? selected[0]
+                        : `${selected.length}개 선택`;
+                };
+                updateTrigger();
+
+                const dropdown = Utils.createElement('div', { className: 'ms-dropdown no-drag' });
+                dropdown.addEventListener('mousedown', e => e.stopPropagation());
+
+                const searchWrap = Utils.createElement('div', { className: 'no-drag', style: 'padding:6px 8px;border-bottom:1px solid var(--border);' });
+                const searchInput = Utils.createElement('input');
+                searchInput.type = 'text';
+                searchInput.placeholder = '검색...';
+                searchInput.className = 'no-drag';
+                searchInput.style.cssText = 'width:100%;background:transparent;border:none;outline:none;color:white;font-size:12px;';
+                searchInput.addEventListener('mousedown', e => e.stopPropagation());
+                searchInput.addEventListener('input', () => {
+                    const q = searchInput.value.toLowerCase();
+                    dropdown.querySelectorAll('.ms-option:not(.all-opt)').forEach(opt => {
+                        opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+                    });
+                });
+                searchWrap.appendChild(searchInput);
+                dropdown.appendChild(searchWrap);
+
+                const allOpt = Utils.createElement('label', { className: 'ms-option all-opt no-drag' });
+                const allChk = Utils.createElement('input');
+                allChk.type = 'checkbox'; allChk.checked = true; allChk.className = 'no-drag';
+                allOpt.appendChild(allChk);
+                allOpt.appendChild(document.createTextNode('전체 (All)'));
+                dropdown.appendChild(allOpt);
+
+                const optChks = [];
+                values.forEach(v => {
+                    const opt = Utils.createElement('label', { className: 'ms-option no-drag' });
+                    const chk = Utils.createElement('input');
+                    chk.type = 'checkbox'; chk.value = String(v); chk.className = 'no-drag';
+                    chk.addEventListener('change', () => {
+                        if (chk.checked) selected.push(String(v));
+                        else selected = selected.filter(s => s !== String(v));
+                        allChk.checked = selected.length === 0;
+                        updateTrigger();
+                        if (AppState.filters.groups[groupIdx]) AppState.filters.groups[groupIdx][col] = [...selected];
+                        AppState.applyFilters();
+                    });
+                    optChks.push(chk);
+                    opt.appendChild(chk);
+                    opt.appendChild(document.createTextNode(String(v)));
+                    dropdown.appendChild(opt);
+                });
+
+                allChk.addEventListener('change', () => {
+                    selected = [];
+                    optChks.forEach(c => { c.checked = false; });
+                    allChk.checked = true;
+                    updateTrigger();
+                    if (AppState.filters.groups[groupIdx]) AppState.filters.groups[groupIdx][col] = [];
                     AppState.applyFilters();
+                });
+
+                trigger.addEventListener('mousedown', e => e.stopPropagation());
+                trigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.ms-dropdown.open').forEach(d => { if (d !== dropdown) d.classList.remove('open'); });
+                    dropdown.classList.toggle('open');
+                    if (dropdown.classList.contains('open')) {
+                        // 트리거 위치 기준으로 드롭다운 좌표 계산
+                        const rect = trigger.getBoundingClientRect();
+                        dropdown.style.left = rect.left + 'px';
+                        dropdown.style.top  = (rect.bottom + 4) + 'px';
+                        dropdown.style.minWidth = rect.width + 'px';
+                        searchInput.value = '';
+                        dropdown.querySelectorAll('.ms-option:not(.all-opt)').forEach(opt => opt.style.display = '');
+                        setTimeout(() => searchInput.focus(), 50);
+                    }
                 });
 
                 const removeBtn = Utils.createElement('button', { className: 'remove-btn no-drag', 'aria-label': `${col} 필터 제거` });
                 removeBtn.innerHTML = '<i class="fas fa-times"></i>';
                 removeBtn.addEventListener('click', () => {
                     wrapper.remove();
-                    delete AppState.filters.active[col];
-                    if (Object.keys(AppState.filters.active).length === 0) {
-                        document.getElementById('emptyMsg').classList.remove('hidden');
+                    if (AppState.filters.groups[groupIdx]) delete AppState.filters.groups[groupIdx][col];
+                    const zone = document.querySelector(`.drop-zone[data-group="${groupIdx}"]`);
+                    if (zone && zone.querySelectorAll('.filter-widget').length === 0) {
+                        const msg = zone.querySelector('.text-slate-500');
+                        if (msg) msg.style.display = '';
                     }
                     AppState.applyFilters();
                 });
 
                 wrapper.appendChild(label);
-                wrapper.appendChild(select);
+                wrapper.appendChild(trigger);
+                wrapper.appendChild(dropdown);
                 wrapper.appendChild(removeBtn);
                 return wrapper;
             },
 
             reset() {
-                const zone = document.getElementById('activeFilters');
-                Array.from(zone.children).forEach(child => { if (child.id !== 'emptyMsg') child.remove(); });
-                document.getElementById('emptyMsg').classList.remove('hidden');
-                AppState.filters.active = {};
+                AppState.filters.groups = [{}];
+                this.renderGroups();
                 AppState.applyFilters();
             }
         };
 
-        // ┌──────────────────────────────────────────────────┐
+                // ┌──────────────────────────────────────────────────┐
         // │  필터 프리셋                                      │
         // └──────────────────────────────────────────────────┘
 
@@ -994,7 +1250,7 @@
 
             save(name) {
                 if (!name || !name.trim()) { Utils.showToast('프리셋 이름을 입력해주세요.', 'warning'); return; }
-                this.presets[name] = { ...AppState.filters.active };
+                this.presets[name] = JSON.parse(JSON.stringify(AppState.filters.groups));
                 localStorage.setItem('filterPresets', JSON.stringify(this.presets));
                 this.updateCount();
                 this.renderList();
@@ -1004,15 +1260,8 @@
             load(name) {
                 const preset = this.presets[name];
                 if (preset) {
-                    FilterManager.reset();
-                    AppState.filters.active = { ...preset };
-                    Object.keys(preset).forEach(col => {
-                        const widget = FilterManager.createWidget(col);
-                        document.getElementById('activeFilters').appendChild(widget);
-                        const select = widget.querySelector('select');
-                        if (select) select.value = preset[col];
-                    });
-                    document.getElementById('emptyMsg').classList.add('hidden');
+                    AppState.filters.groups = JSON.parse(JSON.stringify(preset));
+                    FilterManager.renderGroups();
                     AppState.applyFilters();
                     Utils.showToast(`"${name}" 프리셋을 불러왔습니다.`, 'success');
                 }
@@ -1956,6 +2205,10 @@
             const presetToggle = document.getElementById('presetToggle');
             if (!presetList.contains(e.target) && !presetToggle.contains(e.target)) {
                 presetList.classList.add('hidden');
+            }
+            // 다중선택 드롭다운 외부 클릭 닫기
+            if (!e.target.closest('.filter-widget')) {
+                document.querySelectorAll('.ms-dropdown.open').forEach(d => d.classList.remove('open'));
             }
         });
     </script>
