@@ -73,6 +73,24 @@
             background: #334155;
         }
 
+        .col-chip.active {
+            border-color: rgba(59,130,246,0.6);
+            background: rgba(59,130,246,0.1);
+            color: #93c5fd;
+        }
+        .col-chip.active .chip-active-dot {
+            display: inline-block;
+        }
+        .chip-active-dot {
+            display: none;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #3b82f6;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+
         .drop-zone {
             min-height: 80px;
             background: rgba(30, 41, 59, 0.4);
@@ -598,6 +616,10 @@
                 <div class="card h-[500px] flex flex-col">
                     <div class="p-4 border-b border-slate-700 bg-slate-800/30 flex justify-between items-center shrink-0">
                         <h4 class="font-bold text-slate-300 text-sm">데이터 리스트 <span class="text-xs font-normal text-slate-500 ml-1" id="rowCount"></span></h4>
+                        <button onclick="TableRenderer.copyToClipboard()" id="copyTableBtn"
+                            class="px-3 py-1.5 text-xs font-bold bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-all flex items-center gap-1.5">
+                            <i class="fas fa-copy"></i> 복사
+                        </button>
                     </div>
                     <div class="overflow-auto flex-grow custom-scroll">
                         <table class="data-table relative" role="grid" aria-label="차입금 데이터 목록">
@@ -1018,13 +1040,14 @@
 
                 filterableCols.forEach(col => {
                     const chip = Utils.createElement('div', { className: 'col-chip', 'data-col': col, role: 'listitem' });
-                    chip.innerHTML = `<i class="fas fa-tag text-slate-500"></i> ${Utils.escapeHtml(col)}`;
+                    chip.innerHTML = `<i class="fas fa-tag text-slate-500"></i> ${Utils.escapeHtml(col)}<span class="chip-active-dot"></span>`;
                     container.appendChild(chip);
                 });
 
                 new Sortable(container, { group: { name: 'filters', pull: 'clone', put: false }, sort: false, animation: 150 });
 
                 this.renderGroups();
+                this.updateChipStates();
             },
 
             renderGroups() {
@@ -1046,6 +1069,19 @@
                 addBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> OR 조건 추가';
                 addBtn.addEventListener('click', () => this.addGroup());
                 container.appendChild(addBtn);
+
+                this.updateChipStates();
+            },
+
+            // 현재 활성 필터 컬럼 기준으로 사이드바 칩 강조 업데이트
+            updateChipStates() {
+                const activeCols = new Set(
+                    AppState.filters.groups.flatMap(g => Object.keys(g))
+                );
+                document.querySelectorAll('#filterSource .col-chip').forEach(chip => {
+                    const col = chip.getAttribute('data-col');
+                    chip.classList.toggle('active', activeCols.has(col));
+                });
             },
 
             _createGroupEl(group, idx) {
@@ -1149,7 +1185,8 @@
                 searchInput.addEventListener('input', () => {
                     const q = searchInput.value.toLowerCase();
                     dropdown.querySelectorAll('.ms-option:not(.all-opt)').forEach(opt => {
-                        opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+                        const checked = opt.querySelector('input[type=checkbox]')?.checked;
+                        opt.style.display = checked || opt.textContent.toLowerCase().includes(q) ? '' : 'none';
                     });
                 });
                 searchWrap.appendChild(searchInput);
@@ -1433,7 +1470,10 @@
                         this.removeColumn(col);
                     });
 
-                    th.addEventListener('click', () => this.toggleSort(col));
+                    let _dragging = false;
+                    th.addEventListener('mousedown', () => { _dragging = false; });
+                    th.addEventListener('mousemove', () => { _dragging = true; });
+                    th.addEventListener('click', () => { if (!_dragging) this.toggleSort(col); });
 
                     flexContainer.appendChild(colText);
                     flexContainer.appendChild(sortIcon);
@@ -1452,10 +1492,8 @@
                 }
 
                 this._headerSortable = new Sortable(tr, {
-                    group: 'filters',
+                    group: { name: 'columns', put: ['filters'] },  // 필터 칩은 받되 헤더끼리만 정렬
                     animation: 150,
-                    delay: 150,           // 150ms 이상 눌러야 drag 시작 → 단순 클릭은 통과
-                    delayOnTouchOnly: false,
                     onAdd: (evt) => {
                         const item = evt.item;
                         const newCol = item.getAttribute('data-col');
@@ -1477,11 +1515,34 @@
             },
 
             removeColumn(col) {
-                // 컬럼 제거 시 해당 컬럼의 정렬도 함께 제거
                 this.sortOrder = this.sortOrder.filter(s => s.col !== col);
                 this.displayCols = this.displayCols.filter(c => c !== col);
                 this.renderHeaders();
                 this.render(AppState.data.filtered);
+            },
+
+            copyToClipboard() {
+                const data = this.getSortedData(AppState.data.filtered);
+                if (!data.length) { Utils.showToast('복사할 데이터가 없습니다.', 'warning'); return; }
+
+                // 헤더 + 데이터를 탭 구분 텍스트로 변환 (엑셀 붙여넣기 호환)
+                const header = this.displayCols.join('\t');
+                const rows = data.map(d =>
+                    this.displayCols.map(col => {
+                        const v = d[col] !== undefined ? d[col] : '';
+                        return String(v).replace(/\t/g, ' ');
+                    }).join('\t')
+                );
+                const text = [header, ...rows].join('\n');
+
+                navigator.clipboard.writeText(text).then(() => {
+                    const btn = document.getElementById('copyTableBtn');
+                    btn.innerHTML = '<i class="fas fa-check text-emerald-400"></i> 복사됨';
+                    setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> 복사'; }, 2000);
+                    Utils.showToast(`${data.length}건 복사되었습니다.`, 'success');
+                }).catch(() => {
+                    Utils.showToast('클립보드 복사에 실패했습니다.', 'error');
+                });
             },
 
             render(data) {
@@ -2093,6 +2154,7 @@
                         TableRenderer.render(AppState.data.filtered);
                         KPIRenderer.update(AppState.data.filtered);
                         ChartRenderer.render(AppState.data.filtered);
+                        FilterManager.updateChipStates();
                         document.getElementById('detailCard').classList.add('hidden');
                     });
                 } catch (error) {
