@@ -412,6 +412,46 @@
 
         .preset-item:hover button { opacity: 1; }
 
+        /* 피봇 테이블 */
+        #pivotTable th {
+            background: #0f172a; padding: 8px 14px;
+            font-size: 11px; font-weight: 700; color: #64748b;
+            text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap;
+        }
+        #pivotTable th:first-child { text-align: left; position: sticky; left: 0; background: #0f172a; z-index: 2; }
+        #pivotTable th.pv-total { color: #a78bfa; }
+        #pivotTable td {
+            padding: 8px 14px; border-bottom: 1px solid rgba(51,65,85,.4);
+            text-align: right; white-space: nowrap; color: #94a3b8;
+        }
+        #pivotTable td:first-child {
+            text-align: left; font-weight: 600; color: #cbd5e1;
+            position: sticky; left: 0; background: #1e293b; border-right: 1px solid var(--border);
+        }
+        #pivotTable tbody tr:hover td { background: rgba(59,130,246,.06); }
+        #pivotTable tbody tr:hover td:first-child { background: rgba(59,130,246,.1); }
+        #pivotTable tfoot td {
+            padding: 8px 14px; text-align: right; font-weight: 700;
+            color: #a78bfa; border-top: 2px solid var(--border);
+            background: rgba(124,58,237,.06); white-space: nowrap;
+        }
+        #pivotTable tfoot td:first-child {
+            text-align: left; position: sticky; left: 0;
+            background: rgba(124,58,237,.1); border-right: 1px solid var(--border);
+        }
+        .pv-h0 { color: #334155 !important; }
+        .pv-h1 { color: #7dd3fc !important; }
+        .pv-h2 { color: #38bdf8 !important; font-weight: 500 !important; }
+        .pv-h3 { color: #0ea5e9 !important; font-weight: 600 !important; }
+        .pv-h4 { color: #6366f1 !important; font-weight: 700 !important; }
+        .pv-h5 { color: #a855f7 !important; font-weight: 700 !important; background: rgba(168,85,247,.08) !important; }
+        .pivot-agg-btn { transition: all .2s; }
+        .pivot-agg-btn.active-agg { background: rgba(59,130,246,.2); border-color: rgba(59,130,246,.6); color: #93c5fd; }
+        .pivot-kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; flex: 1; min-width: 120px; }
+        .pivot-kpi-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 3px; }
+        .pivot-kpi-val { font-size: 18px; font-weight: 700; color: #f1f5f9; }
+        .pivot-kpi-sub { font-size: 10px; color: #64748b; margin-top: 2px; }
+
         .version-timeline-line {
             width: 1px;
             background: #334155;
@@ -484,6 +524,7 @@
                 <button class="step-btn admin-only" onclick="AppController.goStep(0)" id="btn-step-0" role="tab" aria-selected="false">1. 데이터 동기화</button>
                 <button class="step-btn admin-only" onclick="AppController.goStep(1)" id="btn-step-1" role="tab" aria-selected="false" disabled>2. 무결성 검증</button>
                 <button class="step-btn" onclick="AppController.goStep(2)" id="btn-step-2" role="tab" aria-selected="true">분석 대시보드</button>
+                <button class="step-btn" onclick="AppController.goStep(4)" id="btn-step-4" role="tab" aria-selected="false">피봇 분석</button>
                 <button class="step-btn" onclick="AppController.goStep(3)" id="btn-step-3" role="tab" aria-selected="false">버전 히스토리</button>
             </div>
 
@@ -626,6 +667,75 @@
                             <thead id="tableHead" class="sticky top-0 z-10"></thead>
                             <tbody id="tableBody"></tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 4: Pivot -->
+            <div id="step-4" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-4">
+                <div class="card p-5 border-l-4 border-l-violet-500">
+
+                    <!-- 프리셋 -->
+                    <div class="flex items-center gap-2 mb-4 flex-wrap">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">빠른 조합</span>
+                        <button onclick="PivotManager.applyPreset('maturity')" class="px-3 py-1 text-xs font-semibold rounded-full border border-slate-700 text-slate-400 hover:border-red-400 hover:text-red-400 transition-all">
+                            <i class="fas fa-calendar-times mr-1"></i>만기도래
+                        </button>
+                        <button onclick="PivotManager.applyPreset('lender')" class="px-3 py-1 text-xs font-semibold rounded-full border border-slate-700 text-slate-400 hover:border-blue-400 hover:text-blue-400 transition-all">
+                            <i class="fas fa-university mr-1"></i>차입처×통화
+                        </button>
+                        <button onclick="PivotManager.applyPreset('rate')" class="px-3 py-1 text-xs font-semibold rounded-full border border-slate-700 text-slate-400 hover:border-emerald-400 hover:text-emerald-400 transition-all">
+                            <i class="fas fa-percentage mr-1"></i>금리유형×차입처
+                        </button>
+                        <button onclick="PivotManager.applyPreset('yrq')" class="px-3 py-1 text-xs font-semibold rounded-full border border-slate-700 text-slate-400 hover:border-violet-400 hover:text-violet-400 transition-all">
+                            <i class="fas fa-chart-bar mr-1"></i>실행연도×분기
+                        </button>
+                    </div>
+
+                    <!-- 컨트롤 -->
+                    <div class="flex gap-4 flex-wrap items-end mb-5 p-4 bg-slate-900/50 rounded-xl border border-slate-700">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">행 기준</label>
+                            <select id="pivotRow" onchange="PivotManager.render()"
+                                class="bg-slate-900 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs outline-none focus:border-blue-500"></select>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">열 기준</label>
+                            <select id="pivotCol" onchange="PivotManager.render()"
+                                class="bg-slate-900 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs outline-none focus:border-blue-500"></select>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">집계 값</label>
+                            <select id="pivotVal" onchange="PivotManager.render()"
+                                class="bg-slate-900 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs outline-none focus:border-blue-500"></select>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">집계 방식</label>
+                            <div class="flex gap-1.5">
+                                <button class="pivot-agg-btn px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-700 text-slate-400 transition-all active-agg" data-agg="sum">합계</button>
+                                <button class="pivot-agg-btn px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-700 text-slate-400 transition-all" data-agg="count">건수</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- KPI -->
+                    <div id="pivotKpi" class="flex gap-3 mb-4 flex-wrap"></div>
+
+                    <!-- 테이블 -->
+                    <div class="overflow-auto rounded-xl border border-slate-700">
+                        <div class="flex justify-between items-center px-4 py-2.5 bg-slate-900/60 border-b border-slate-700">
+                            <span id="pivotTitle" class="text-xs font-bold text-slate-300">—</span>
+                            <div class="flex items-center gap-3">
+                                <span id="pivotMeta" class="text-[10px] text-slate-500"></span>
+                                <button onclick="PivotManager.copyToClipboard()" id="copyPivotBtn"
+                                    class="px-3 py-1 text-xs font-bold bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-all flex items-center gap-1.5">
+                                    <i class="fas fa-copy"></i> 복사
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-auto">
+                            <table id="pivotTable" class="w-full border-collapse text-xs"></table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2080,6 +2190,273 @@
         };
 
         // ┌──────────────────────────────────────────────────┐
+        // │  피봇 매니저                                      │
+        // └──────────────────────────────────────────────────┘
+
+        const PivotManager = {
+            _agg: 'sum',
+            _showTotals: true,
+
+            DIM_COLS:   ['차입처','통화','금리유형','만기_년도','만기_월','만기_분기','실행_년도','실행_분기'],
+            VALUE_COLS: ['원화환산잔액'],
+            MONTHS_ORDER:  ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+            QUARTER_ORDER: ['Q1','Q2','Q3','Q4'],
+
+            PRESETS: {
+                maturity: { row:'만기_월',  col:'만기_년도', val:'원화환산잔액', agg:'sum'   },
+                lender:   { row:'차입처',   col:'통화',      val:'원화환산잔액', agg:'sum'   },
+                rate:     { row:'금리유형', col:'차입처',    val:'원화환산잔액', agg:'sum'   },
+                yrq:      { row:'실행_년도',col:'실행_분기', val:'원화환산잔액', agg:'count' },
+            },
+
+            init() {
+                // 드롭다운 초기화
+                const rowSel = document.getElementById('pivotRow');
+                const colSel = document.getElementById('pivotCol');
+                const valSel = document.getElementById('pivotVal');
+                if (!rowSel) return;
+
+                // 숫자형 컬럼 감지 — 첫 10행 샘플로 판단
+                const sample = AppState.data.raw.slice(0, 10);
+                const numCols = new Set(
+                    AppState.data.columns.filter(col =>
+                        sample.some(row => {
+                            const v = String(row[col] || '').replace(/,/g, '');
+                            return v !== '' && !isNaN(parseFloat(v));
+                        }) &&
+                        sample.every(row => {
+                            const v = String(row[col] || '').replace(/,/g, '');
+                            return v === '' || !isNaN(parseFloat(v));
+                        })
+                    )
+                );
+
+                // 날짜 컬럼 감지 (YYYY-MM-DD 패턴)
+                const DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+                const dateCols = AppState.data.columns.filter(col =>
+                    sample.some(row => DATE_RE.test(String(row[col] || '')))
+                );
+
+                // 파생 컬럼 자동 추가
+                const DERIVED = [];
+                dateCols.forEach(col => {
+                    DERIVED.push(`${col}_년도`, `${col}_월`, `${col}_분기`);
+                });
+
+                // 차원 컬럼 = 숫자형 제외 + 파생 추가
+                const dimCols = [
+                    ...AppState.data.columns.filter(c => !numCols.has(c)),
+                    ...DERIVED
+                ];
+
+                rowSel.innerHTML = '';
+                colSel.innerHTML = '';
+                valSel.innerHTML = '';
+
+                dimCols.forEach(c => {
+                    rowSel.add(new Option(c, c));
+                    colSel.add(new Option(c, c));
+                });
+                this.VALUE_COLS.forEach(c => valSel.add(new Option(c, c)));
+
+                // 기본값 — 파생 컬럼 있으면 만기_월/만기_년도, 없으면 첫 번째
+                const toMonthCol = DERIVED.find(d => d.includes('TO_월') || d.includes('만기_월')) || dimCols[0];
+                const toYearCol  = DERIVED.find(d => d.includes('TO_년도') || d.includes('만기_년도')) || dimCols[1] || dimCols[0];
+                rowSel.value = dimCols.includes('TO_월')    ? 'TO_월'
+                             : dimCols.includes('만기_월')  ? '만기_월'
+                             : dimCols[0];
+                colSel.value = dimCols.includes('TO_년도')   ? 'TO_년도'
+                             : dimCols.includes('만기_년도') ? '만기_년도'
+                             : dimCols[1] || dimCols[0];
+                valSel.value = '원화환산잔액';
+
+                // 파생 컬럼 맵 업데이트 (TO, FROM 포함 동적 처리)
+                this._dateCols = dateCols;
+
+                // 집계 버튼
+                document.querySelectorAll('.pivot-agg-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.pivot-agg-btn').forEach(b => b.classList.remove('active-agg'));
+                        btn.classList.add('active-agg');
+                        this._agg = btn.dataset.agg;
+                        this.render();
+                    });
+                });
+
+                this.render();
+            },
+
+            // 날짜 파생 컬럼 동적 생성
+            _derive(row) {
+                const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+                const q = mo => `Q${Math.ceil((mo+1)/3)}`;
+                const derived = { ...row };
+                (this._dateCols || []).forEach(col => {
+                    const d = row[col] ? new Date(row[col]) : null;
+                    derived[`${col}_년도`]  = d ? String(d.getFullYear()) : '-';
+                    derived[`${col}_월`]    = d ? MONTHS[d.getMonth()]   : '-';
+                    derived[`${col}_분기`]  = d ? q(d.getMonth())        : '-';
+                });
+                // 레거시 호환 (기존 만기_*, 실행_* 키)
+                const toD = row['TO']   ? new Date(row['TO'])   : null;
+                const frD = row['FROM'] ? new Date(row['FROM']) : null;
+                derived['만기_년도'] = toD ? String(toD.getFullYear()) : '-';
+                derived['만기_월']   = toD ? MONTHS[toD.getMonth()]   : '-';
+                derived['만기_분기'] = toD ? q(toD.getMonth())        : '-';
+                derived['실행_년도'] = frD ? String(frD.getFullYear()) : '-';
+                derived['실행_분기'] = frD ? q(frD.getMonth())        : '-';
+                return derived;
+            },
+
+            _sortKeys(keys, field) {
+                if (field === '만기_월')  return this.MONTHS_ORDER.filter(k => keys.includes(k));
+                if (field.includes('분기')) return this.QUARTER_ORDER.filter(k => keys.includes(k));
+                return [...keys].sort((a,b) => { const na=Number(a),nb=Number(b); return (!isNaN(na)&&!isNaN(nb))?na-nb:a.localeCompare(b,'ko'); });
+            },
+
+            _agg(vals) {
+                if (!vals.length) return 0;
+                if (this._agg === 'count') return vals.length;
+                if (this._agg === 'avg')   return vals.reduce((s,v)=>s+v,0)/vals.length;
+                return vals.reduce((s,v)=>s+v,0);
+            },
+
+            _fmt(v, valF) {
+                if (v === 0) return '-';
+                if (this._agg === 'count') return v.toLocaleString()+'건';
+                if (this._agg === 'avg')   return Math.round(v).toLocaleString();
+                return Math.round(v).toLocaleString();
+            },
+
+            _heat(v, max) {
+                if (!max||v===0) return 'pv-h0';
+                const r=v/max;
+                if (r>.8) return 'pv-h5'; if (r>.6) return 'pv-h4';
+                if (r>.4) return 'pv-h3'; if (r>.2) return 'pv-h2'; return 'pv-h1';
+            },
+
+            toggleTotals() {
+                this._showTotals = !this._showTotals;
+                const btn = document.getElementById('pivotTotalToggle');
+                if (this._showTotals) {
+                    btn.innerHTML = '<i class="fas fa-eye mr-1"></i>표시 중';
+                    btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-700 text-slate-400 transition-all hover:border-slate-500';
+                } else {
+                    btn.innerHTML = '<i class="fas fa-eye-slash mr-1"></i>숨김';
+                    btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-500/50 text-amber-400 transition-all';
+                }
+                this.render();
+            },
+
+            applyPreset(key) {
+                const p = this.PRESETS[key];
+                document.getElementById('pivotRow').value = p.row;
+                document.getElementById('pivotCol').value = p.col;
+                document.getElementById('pivotVal').value = p.val;
+                this._agg = p.agg;
+                document.querySelectorAll('.pivot-agg-btn').forEach(b => b.classList.toggle('active-agg', b.dataset.agg===p.agg));
+                this.render();
+            },
+
+            render() {
+                const rowF = document.getElementById('pivotRow')?.value;
+                const colF = document.getElementById('pivotCol')?.value;
+                const valF = document.getElementById('pivotVal')?.value;
+                if (!rowF) return;
+
+                const data = AppState.data.filtered.map(d => this._derive(d));
+
+                const rowKeys = this._sortKeys([...new Set(data.map(d=>d[rowF]))].filter(v=>v&&v!=='-'), rowF);
+                const colKeys = this._sortKeys([...new Set(data.map(d=>d[colF]))].filter(v=>v&&v!=='-'), colF);
+
+                if (!rowKeys.length || !colKeys.length) {
+                    document.getElementById('pivotTable').innerHTML =
+                        '<tr><td colspan="99" style="text-align:center;padding:40px;color:#64748b;">데이터가 없습니다.</td></tr>';
+                    document.getElementById('pivotKpi').innerHTML = '';
+                    return;
+                }
+
+                // 집계 맵
+                const map = {};
+                rowKeys.forEach(r => { map[r]={}; colKeys.forEach(c => { map[r][c]=[]; }); });
+                data.forEach(d => {
+                    const r=d[rowF], c=d[colF];
+                    if (map[r]?.[c]!==undefined) map[r][c].push(valF==='건수'?1:(parseFloat(String(d[valF]||'').replace(/,/g,''))||0));
+                });
+
+                let globalMax = 0;
+                rowKeys.forEach(r => colKeys.forEach(c => { const v=this._aggCalc(map[r][c]); if(v>globalMax)globalMax=v; }));
+
+                const rowTotals = {};
+                rowKeys.forEach(r => { rowTotals[r]=this._aggCalc(colKeys.flatMap(c=>map[r][c])); });
+                const colTotals = {};
+                colKeys.forEach(c => { colTotals[c]=this._aggCalc(rowKeys.flatMap(r=>map[r][c])); });
+                const grand = this._aggCalc(data.map(d=>parseFloat(String(d[valF]||'').replace(/,/g,''))||0));
+
+                const thead = `<thead><tr>
+                    <th>${rowF} ↓ / ${colF} →</th>
+                    ${colKeys.map(c=>`<th>${Utils.escapeHtml(c)}</th>`).join('')}
+                    <th class="pv-total">합계</th>
+                </tr></thead>`;
+
+                const tbody = `<tbody>${rowKeys.map(r=>`<tr>
+                    <td>${Utils.escapeHtml(r)}</td>
+                    ${colKeys.map(c=>{ const v=this._aggCalc(map[r][c]); return `<td>${this._fmt(v,valF)}</td>`; }).join('')}
+                    <td style="color:#a78bfa;font-weight:700;">${this._fmt(rowTotals[r],valF)}</td>
+                </tr>`).join('')}</tbody>`;
+
+                const tfoot = `<tfoot><tr>
+                    <td>합계</td>
+                    ${colKeys.map(c=>`<td>${this._fmt(colTotals[c],valF)}</td>`).join('')}
+                    <td>${this._fmt(grand,valF)}</td>
+                </tr></tfoot>`;
+
+                document.getElementById('pivotTable').innerHTML = thead+tbody+tfoot;
+
+                const aggLabel = {sum:'합계',count:'건수',avg:'평균'}[this._agg];
+                document.getElementById('pivotTitle').textContent = `${rowF} × ${colF} — ${valF} ${aggLabel}`;
+                document.getElementById('pivotMeta').textContent  = `${rowKeys.length}행 × ${colKeys.length}열 · ${data.length}건`;
+
+                // KPI
+                const peakRow = rowKeys.reduce((best,r) => rowTotals[r]>rowTotals[best]?r:best, rowKeys[0]);
+                const peakCol = colKeys.reduce((best,c) => colTotals[c]>colTotals[best]?c:best, colKeys[0]);
+                document.getElementById('pivotKpi').innerHTML = `
+                    <div class="pivot-kpi"><div class="pivot-kpi-label">총 ${valF}</div><div class="pivot-kpi-val">${this._fmt(grand,valF)}</div><div class="pivot-kpi-sub">${data.length}건</div></div>
+                    <div class="pivot-kpi"><div class="pivot-kpi-label">최대 행</div><div class="pivot-kpi-val" style="font-size:14px;">${Utils.escapeHtml(peakRow)}</div><div class="pivot-kpi-sub">${this._fmt(rowTotals[peakRow],valF)}</div></div>
+                    <div class="pivot-kpi"><div class="pivot-kpi-label">최대 열</div><div class="pivot-kpi-val" style="font-size:14px;">${Utils.escapeHtml(peakCol)}</div><div class="pivot-kpi-sub">${this._fmt(colTotals[peakCol],valF)}</div></div>
+                `;
+            },
+
+            // 집계 계산 (메서드명 충돌 방지)
+            _aggCalc(vals) {
+                if (!vals.length) return 0;
+                if (this._agg === 'count') return vals.length;
+                if (this._agg === 'avg')   return vals.reduce((s,v)=>s+v,0)/vals.length;
+                return vals.reduce((s,v)=>s+v,0);
+            },
+
+            copyToClipboard() {
+                const table = document.getElementById('pivotTable');
+                if (!table) return;
+
+                const rows = [];
+                table.querySelectorAll('thead tr, tbody tr, tfoot tr').forEach(tr => {
+                    const cells = [...tr.querySelectorAll('th, td')].map(cell =>
+                        cell.textContent.trim().replace(/\t/g, ' ')
+                    );
+                    rows.push(cells.join('\t'));
+                });
+
+                navigator.clipboard.writeText(rows.join('\n')).then(() => {
+                    const btn = document.getElementById('copyPivotBtn');
+                    btn.innerHTML = '<i class="fas fa-check text-emerald-400"></i> 복사됨';
+                    setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> 복사'; }, 2000);
+                    Utils.showToast('피봇 테이블이 복사되었습니다.', 'success');
+                }).catch(() => Utils.showToast('클립보드 복사에 실패했습니다.', 'error'));
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
         // │  CSV 내려받기                                     │
         // └──────────────────────────────────────────────────┘
 
@@ -2155,6 +2532,7 @@
                         KPIRenderer.update(AppState.data.filtered);
                         ChartRenderer.render(AppState.data.filtered);
                         FilterManager.updateChipStates();
+                        if (AppState.ui.currentStep === 4) PivotManager.render();
                         document.getElementById('detailCard').classList.add('hidden');
                     });
                 } catch (error) {
@@ -2200,6 +2578,7 @@
                     VersionHistory.load();
                     FeedbackManager.load();
                 }
+                if (n === 4) PivotManager.init();
             },
 
             async fetchData() {
