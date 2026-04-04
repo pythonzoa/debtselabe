@@ -452,6 +452,28 @@
         .pivot-kpi-val { font-size: 18px; font-weight: 700; color: #f1f5f9; }
         .pivot-kpi-sub { font-size: 10px; color: #64748b; margin-top: 2px; }
 
+        /* 접속자 아바타 */
+        .presence-avatar {
+            width: 28px; height: 28px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 700; color: white;
+            border: 2px solid #1e293b;
+            margin-left: -6px; cursor: default;
+            transition: transform .2s;
+            position: relative;
+        }
+        .presence-avatar:first-child { margin-left: 0; }
+        .presence-avatar:hover { transform: translateY(-3px); z-index: 10; }
+        .presence-avatar .avatar-tooltip {
+            display: none; position: absolute; bottom: calc(100% + 6px);
+            left: 50%; transform: translateX(-50%);
+            background: #0f172a; border: 1px solid #334155;
+            color: #e2e8f0; font-size: 10px; font-weight: 600;
+            padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+            pointer-events: none; z-index: 50;
+        }
+        .presence-avatar:hover .avatar-tooltip { display: block; }
+
 
         .version-timeline-line {
             width: 1px;
@@ -509,6 +531,9 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
+                    <!-- 접속자 아바타 -->
+                    <div id="presenceArea" class="flex items-center gap-1" title="현재 접속자"></div>
+
                     <button onclick="AppController.fetchData()" id="refreshBtn"
                         class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all flex items-center gap-2">
                         <i class="fas fa-sync-alt"></i> <span class="hidden md:inline">새로고침</span>
@@ -1044,6 +1069,29 @@
                         }), 300);
                     }
                 });
+            },
+
+            async presencePing() {
+                return new Promise((resolve) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(() => resolve({ success: false, users: [] }))
+                            .presencePing();
+                    } else {
+                        // 목업: 2명 접속 중
+                        resolve({ success: true, users: [
+                            { email: 'me@test.com',    name: 'me',    initials: 'ME' },
+                            { email: 'other@test.com', name: 'other', initials: 'OT' },
+                        ]});
+                    }
+                });
+            },
+
+            presenceLeave() {
+                if (typeof google !== 'undefined' && google.script) {
+                    google.script.run.presenceLeave();
+                }
             }
         };
 
@@ -1982,31 +2030,95 @@
             render(validation) {
                 if (!validation) return;
 
-                const missing = validation.warnings.filter(w => w.field === '차입처').length;
-                const duplicates = validation.warnings.filter(w => w.message.includes('중복')).length;
-                const noMaturity = validation.warnings.filter(w => w.field === 'TO').length;
+                const errors   = validation.errors   || [];
+                const warnings = validation.warnings || [];
                 const totalRows = validation.summary?.totalRows || 0;
 
-                document.getElementById('validationResult').innerHTML = `
-                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
-                        <span><i class="fas fa-exclamation-circle text-amber-400 mr-2"></i>차입처 누락</span>
-                        <span class="font-bold ${missing > 0 ? 'text-amber-400' : 'text-emerald-400'}">${missing}건</span>
-                    </div>
-                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
-                        <span><i class="fas fa-copy text-amber-400 mr-2"></i>DEAL 중복</span>
-                        <span class="font-bold ${duplicates > 0 ? 'text-amber-400' : 'text-emerald-400'}">${duplicates}건</span>
-                    </div>
-                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
-                        <span><i class="fas fa-calendar-times text-amber-400 mr-2"></i>만기일 누락</span>
-                        <span class="font-bold ${noMaturity > 0 ? 'text-amber-400' : 'text-emerald-400'}">${noMaturity}건</span>
-                    </div>
-                    <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700 flex justify-between items-center">
-                        <span><i class="fas fa-database text-blue-400 mr-2"></i>총 데이터</span>
-                        <span class="font-bold text-blue-400">${totalRows}건</span>
-                    </div>
-                `;
+                // 카테고리별 집계
+                const groups = {
+                    'DEAL':        { label: 'DEAL',          icon: 'fa-copy',           items: [] },
+                    '날짜':        { label: '날짜',           icon: 'fa-calendar-times', items: [] },
+                    '필수값':      { label: '필수값 누락',    icon: 'fa-exclamation-circle', items: [] },
+                    '금액':        { label: '금액',           icon: 'fa-won-sign',       items: [] },
+                    '금리':        { label: '금리',           icon: 'fa-percentage',     items: [] },
+                    '오류':        { label: '오류 (Error)',   icon: 'fa-times-circle',   items: [] },
+                };
 
-                if (validation.errors.length > 0) Utils.showToast(`${validation.errors.length}개의 오류가 발견되었습니다.`, 'error');
+                // Error → 오류 그룹
+                errors.forEach(e => groups['오류'].items.push({ ...e, isError: true }));
+
+                // Warning → 필드 기준으로 분류
+                const fieldMap = {
+                    'DEAL': '오류', '차입처': '필수값', '통화': '필수값', '금리유형': '필수값',
+                    'FROM': '날짜', 'TO': '날짜', 'FROM/TO': '날짜',
+                    '원화환산잔액': '금액', '당월잔액': '금액', '잔액': '금액', '차입금액': '금액',
+                    '적용율': '금리', '기준금리': '금리', '스프레드': '금리',
+                };
+                warnings.forEach(w => {
+                    // DEAL 중복은 DEAL 그룹으로
+                    if (w.message && w.message.includes('중복')) {
+                        groups['DEAL'].items.push(w);
+                    } else {
+                        const grp = fieldMap[w.field] || '필수값';
+                        groups[grp].items.push(w);
+                    }
+                });
+
+                const totalIssues = errors.length + warnings.length;
+
+                // 상단 요약 바
+                const summaryHtml = `
+                    <div class="col-span-2 p-4 rounded-xl border flex justify-between items-center mb-2
+                        ${errors.length > 0 ? 'bg-red-900/20 border-red-700/50' :
+                          totalIssues > 0  ? 'bg-amber-900/20 border-amber-700/50' :
+                                             'bg-emerald-900/20 border-emerald-700/50'}">
+                        <div class="flex items-center gap-3">
+                            <i class="fas ${errors.length > 0 ? 'fa-times-circle text-red-400' :
+                                           totalIssues > 0  ? 'fa-exclamation-triangle text-amber-400' :
+                                                              'fa-check-circle text-emerald-400'} text-lg"></i>
+                            <div>
+                                <p class="font-bold text-sm ${errors.length > 0 ? 'text-red-300' : totalIssues > 0 ? 'text-amber-300' : 'text-emerald-300'}">
+                                    ${errors.length > 0 ? `오류 ${errors.length}건 발견` :
+                                      totalIssues > 0  ? `경고 ${warnings.length}건 발견` : '이상 없음'}
+                                </p>
+                                <p class="text-xs text-slate-500 mt-0.5">총 ${totalRows}건 검사</p>
+                            </div>
+                        </div>
+                        <span class="text-xs text-slate-400">Error ${errors.length} / Warning ${warnings.length}</span>
+                    </div>`;
+
+                // 그룹 카드
+                const cardsHtml = Object.entries(groups).map(([key, grp]) => {
+                    const count = grp.items.length;
+                    const hasError = grp.items.some(i => i.isError);
+                    const color = count === 0 ? 'text-emerald-400' : hasError ? 'text-red-400' : 'text-amber-400';
+                    const borderColor = count === 0 ? 'border-slate-700' : hasError ? 'border-red-700/40' : 'border-amber-700/40';
+                    const bg = count === 0 ? '' : hasError ? 'bg-red-900/10' : 'bg-amber-900/10';
+
+                    const detailHtml = count > 0 ? `
+                        <div class="mt-3 pt-3 border-t border-slate-700 flex flex-col gap-1 max-h-32 overflow-y-auto">
+                            ${grp.items.map(item => `
+                                <p class="text-[11px] text-slate-400 leading-relaxed">
+                                    <span class="text-slate-500 mr-1">${item.row}행</span>${Utils.escapeHtml(item.message)}
+                                </p>`).join('')}
+                        </div>` : '';
+
+                    return `
+                        <div class="p-4 rounded-xl border ${borderColor} ${bg} bg-slate-800/50">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm flex items-center gap-2">
+                                    <i class="fas ${grp.icon} ${color}"></i>${grp.label}
+                                </span>
+                                <span class="font-bold ${color}">${count}건</span>
+                            </div>
+                            ${detailHtml}
+                        </div>`;
+                }).join('');
+
+                document.getElementById('validationResult').innerHTML = summaryHtml + cardsHtml;
+
+                if (errors.length > 0) Utils.showToast(`오류 ${errors.length}건이 발견되었습니다.`, 'error');
+                else if (warnings.length > 0) Utils.showToast(`경고 ${warnings.length}건을 확인하세요.`, 'warning');
             }
         };
 
@@ -2465,6 +2577,67 @@
         };
 
         // ┌──────────────────────────────────────────────────┐
+        // │  접속자 현황 (Presence)                           │
+        // └──────────────────────────────────────────────────┘
+
+        const PresenceManager = {
+            _myEmail: '',
+            _colors: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
+                      '#06b6d4','#f97316','#ec4899','#14b8a6','#84cc16'],
+
+            // 이메일 → 고정 색상
+            _color(email) {
+                let hash = 0;
+                for (let i = 0; i < email.length; i++) hash = (hash * 31 + email.charCodeAt(i)) >>> 0;
+                return this._colors[hash % this._colors.length];
+            },
+
+            start(myEmail) {
+                this._myEmail = myEmail;
+                this._ping();
+                // 탭 닫을 때 퇴장
+                window.addEventListener('beforeunload', () => {
+                    DataService.presenceLeave();
+                });
+            },
+
+            async _ping() {
+                const res = await DataService.presencePing();
+                if (res && res.users) this._render(res.users);
+            },
+
+            _render(users) {
+                const area = document.getElementById('presenceArea');
+                if (!area) return;
+
+                // 본인을 맨 앞으로
+                const sorted = [
+                    ...users.filter(u => u.email === this._myEmail),
+                    ...users.filter(u => u.email !== this._myEmail),
+                ];
+
+                const MAX_SHOW = 5;
+                const visible  = sorted.slice(0, MAX_SHOW);
+                const overflow = sorted.length - MAX_SHOW;
+
+                area.innerHTML = visible.map(u => {
+                    const isSelf = u.email === this._myEmail;
+                    const color  = this._color(u.email);
+                    const border = isSelf ? '2px solid #fff' : '2px solid #1e293b';
+                    return `<div class="presence-avatar" style="background:${color};border:${border};">
+                        ${Utils.escapeHtml(u.initials)}
+                        <span class="avatar-tooltip">${Utils.escapeHtml(u.email)}${isSelf ? ' (나)' : ''}</span>
+                    </div>`;
+                }).join('') + (overflow > 0
+                    ? `<div class="presence-avatar" style="background:#475569;border:2px solid #1e293b;">
+                        +${overflow}
+                        <span class="avatar-tooltip">${overflow}명 더 접속 중</span>
+                       </div>`
+                    : '');
+            }
+        };
+
+        // ┌──────────────────────────────────────────────────┐
         // │  CSV 내려받기                                     │
         // └──────────────────────────────────────────────────┘
 
@@ -2533,6 +2706,21 @@
                     FeedbackManager.init();
 
                     const user = await DataService.getUserPermission();
+
+                    // B열 허용 목록에 없으면 접근 차단
+                    if (user.isAllowed === false) {
+                        document.body.innerHTML = `
+                            <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#f1f5f9;font-family:sans-serif;">
+                                <div style="text-align:center;">
+                                    <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+                                    <h1 style="font-size:20px;font-weight:700;margin-bottom:8px;">접근 권한이 없습니다</h1>
+                                    <p style="font-size:13px;color:#64748b;">${Utils.escapeHtml(user.email)}</p>
+                                    <p style="font-size:12px;color:#475569;margin-top:8px;">관리자에게 접근 권한을 요청하세요.</p>
+                                </div>
+                            </div>`;
+                        return;
+                    }
+
                     this.initUser(user);
 
                     AppState.subscribe(() => {
@@ -2563,6 +2751,9 @@
                     badge.innerHTML = '<i class="fas fa-user text-slate-400 mr-1"></i> Viewer';
                     this.fetchData();
                 }
+
+                // 접속자 현황 시작
+                PresenceManager.start(user.email || '');
             },
 
             goStep(n) {
