@@ -519,11 +519,13 @@
         <div class="main-area">
             <header class="flex justify-between items-center mb-6">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30 text-white text-xl">
-                        <i class="fas fa-plane-departure"></i>
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg p-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1167.82 1213.33">
+                            <path fill="#051766" d="m230.54,819.43l-3.46,2.39c70.62,130.21,204.31,218.18,356.83,218.18,226.85,0,410.58-194.13,410.58-433.33,0-65.87-27.3-121.33-59.58-163.36-42.91-55.91-104-82.76-164.88-83.21-50.27-.43-102.27,16.46-138.88,49.61-41.82,37.91-51.13,86.67-61.97,165.75-11.91,86.67-81.69,146.46-171.39,146.46-116.13,0-188.06-71.49-183.3-180.91.43-7.58,1.09-15.16,2.39-22.54,21.88-129.13,160.76-262.39,369.64-261.94,140.18,0,245.48,31.42,350.79,137.36l3.46-2.39c-70.64-130.19-204.09-218.16-356.85-218.16-226.64,0-410.58,194.13-410.58,433.33,0,65.87,27.3,121.33,59.58,163.36,42.69,55.91,104,82.55,164.88,83.21,50.27.64,102.27-16.46,138.88-49.61,41.82-37.91,51.13-86.67,61.97-165.75,11.91-86.67,81.91-146.46,171.39-146.46,116.36,0,188.28,71.49,183.52,180.91-.43,7.58-1.09,15.16-2.39,22.54-22.31,129.13-160.55,262.39-369.85,261.94-140.18-.02-245.48-31.44-350.77-137.38Z"/>
+                        </svg>
                     </div>
                     <div>
-                        <h1 class="text-xl font-bold text-white tracking-tight">항공기 금융 통합 분석</h1>
+                        <h1 class="text-xl font-bold text-white tracking-tight">KE Treasury Dashboard</h1>
                         <p class="text-[10px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
                             <span id="userBadge" class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">Connecting...</span>
                             <span id="dataSourceBadge" class="hidden bg-slate-800 px-2 py-0.5 rounded border border-slate-700"></span>
@@ -582,6 +584,23 @@
             <!-- VIEW 2: Dashboard (Main) -->
             <div id="step-2" class="step-view hidden" role="tabpanel" aria-labelledby="btn-step-2">
 
+                <!-- 기준월 선택 바 -->
+                <div class="mb-4 flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700">
+                    <i class="fas fa-calendar-alt text-blue-400 text-sm"></i>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">기준</span>
+                    <select id="monthSelector" onchange="DashboardController.onMonthChange()"
+                        class="bg-slate-900 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs outline-none focus:border-blue-500 transition-colors">
+                        <option value="">최신 (마스터)</option>
+                    </select>
+                    <span id="monthBadge" class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 hidden">
+                        <i class="fas fa-history mr-1"></i>히스토리 조회 중
+                    </span>
+                    <button onclick="DashboardController.resetToMaster()" id="resetToMasterBtn"
+                        class="hidden text-xs text-slate-500 hover:text-white transition-colors flex items-center gap-1">
+                        <i class="fas fa-times"></i> 최신으로 돌아가기
+                    </button>
+                </div>
+
                 <!-- Filter Presets -->
                 <div class="mb-4 flex justify-between items-center">
                     <div class="flex gap-2 items-center">
@@ -617,7 +636,7 @@
                 </div>
 
                 <!-- KPI -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="kpiArea" role="region" aria-label="주요 지표"></div>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6" id="kpiArea" role="region" aria-label="주요 지표"></div>
 
                 <!-- Charts Area -->
                 <div id="chartArea" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1092,6 +1111,41 @@
                 if (typeof google !== 'undefined' && google.script) {
                     google.script.run.presenceLeave();
                 }
+            },
+
+            async getHistoryMonths() {
+                return new Promise((resolve) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(() => resolve({ months: [] }))
+                            .getHistoryMonths();
+                    } else {
+                        resolve({ months: ['202401','202402','202403','202404','202405','202406',
+                                           '202407','202408','202409','202410','202411','202412'] });
+                    }
+                });
+            },
+
+            async getHistoryByMonth(month) {
+                return new Promise((resolve, reject) => {
+                    if (typeof google !== 'undefined' && google.script) {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getHistoryByMonth(month);
+                    } else {
+                        // 목업: 마스터와 동일 포맷으로 반환
+                        setTimeout(() => resolve({
+                            columns: ['DEAL','차입처','통화','원화환산잔액','당월 잔액','적용율','FROM','TO'],
+                            data: [{ DEAL:'MOCK-001', 차입처:'Test Bank', 통화:'USD', 원화환산잔액:'1000000', '당월 잔액':'900000', 적용율:'0.05', FROM:'2020-01-01', TO:'2026-01-01' }],
+                            lastUpdate: `${month.slice(0,4)}년 ${month.slice(4,6)}월 기준`,
+                            allowedFilters: [],
+                            dataSource: 'history',
+                            month
+                        }), 400);
+                    }
+                });
             }
         };
 
@@ -1812,6 +1866,23 @@
                 }, 0);
                 const floatingRatio = total ? floatingSum / total : 0;
 
+                // CRS 반영 후 금리 기준 변동금리 비중
+                // 'CRS 반영 후 금리' 컬럼이 있고 값이 있으면 해당 잔액(원화환산잔액 CRS반영) 집계
+                const crsBalCol  = '원화환산잔액(CRS반영)';
+                const crsRateCol = 'CRS반영후금리';
+                const hasCRS = data.some(d => d[crsRateCol] !== undefined && d[crsRateCol] !== '');
+
+                let crsFloatingSum = 0, crsTotalBal = 0;
+                if (hasCRS) {
+                    data.forEach(b => {
+                        const crsRate = String(b[crsRateCol] || '').trim();
+                        const bal = parseFloat(String(b[crsBalCol] || b['원화환산잔액'] || '').replace(/,/g,'')) || 0;
+                        crsTotalBal += bal;
+                        if (crsRate === '변동') crsFloatingSum += bal;
+                    });
+                }
+                const crsFloatingRatio = crsTotalBal ? crsFloatingSum / crsTotalBal : 0;
+
                 document.getElementById('kpiArea').innerHTML = `
                     <div class="kpi-box border-l-4 border-blue-500 bg-[#1e293b] p-4 rounded-xl shadow-sm">
                         <p class="text-sm text-slate-500 font-bold uppercase">총 잔액</p>
@@ -1832,6 +1903,14 @@
                             <span class="text-sm text-slate-400">(${Utils.formatNumber(floatingSum / 1e8)}억)</span>
                         </div>
                     </div>
+                    ${`
+                    <div class="kpi-box border-l-4 border-cyan-500 bg-[#1e293b] p-4 rounded-xl shadow-sm">
+                        <p class="text-sm text-slate-500 font-bold uppercase">변동 비중 (CRS후)</p>
+                        <div class="flex items-baseline gap-2">
+                            <p class="text-3xl font-bold text-cyan-400 mt-1 kpi-value">${(crsFloatingRatio * 100).toFixed(1)}%</p>
+                            <span class="text-sm text-slate-400">(${Utils.formatNumber(crsFloatingSum / 1e8)}억)</span>
+                        </div>
+                    </div>`}
                 `;
             }
         };
@@ -2013,7 +2092,7 @@
                             ticks: {
                                 color: '#64748b',
                                 font: { size: 11 },
-                                callback: v => (v / 1e8).toFixed(0)
+                                callback: v => (v / 1e8).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
                             }
                         }
                     },
@@ -2697,6 +2776,99 @@
         // │  메인 앱 컨트롤러                                 │
         // └──────────────────────────────────────────────────┘
 
+        // ┌──────────────────────────────────────────────────┐
+        // │  대시보드 기준월 컨트롤러                         │
+        // └──────────────────────────────────────────────────┘
+
+        const DashboardController = {
+            _masterData: null,   // 마스터 데이터 캐시
+
+            // 기준월 목록 로드 (fetchData 완료 후 호출)
+            async initMonthSelector() {
+                const res = await DataService.getHistoryMonths();
+                const sel = document.getElementById('monthSelector');
+                if (!sel || !res.months.length) return;
+
+                sel.innerHTML = '<option value="">최신 (마스터)</option>' +
+                    [...res.months].reverse().map(m =>
+                        `<option value="${m}">${m.replace('-', '년 ')}월</option>`
+                    ).join('');
+            },
+
+            // 기준월 변경 시
+            async onMonthChange() {
+                const sel   = document.getElementById('monthSelector');
+                const month = sel.value;
+                const badge = document.getElementById('monthBadge');
+                const resetBtn = document.getElementById('resetToMasterBtn');
+
+                if (!month) {
+                    this.resetToMaster();
+                    return;
+                }
+
+                // 마스터 데이터 백업
+                if (!this._masterData) {
+                    this._masterData = {
+                        raw: [...AppState.data.raw],
+                        columns: [...AppState.data.columns]
+                    };
+                }
+
+                badge.classList.remove('hidden');
+                resetBtn.classList.remove('hidden');
+                sel.disabled = true;
+
+                try {
+                    LoadingManager.show(`${month} 데이터 조회 중...`);
+                    const res = await DataService.getHistoryByMonth(month);
+                    if (res.error) throw new Error(res.error);
+
+                    AppState.data.raw     = res.data || [];
+                    AppState.data.columns = res.columns || [];
+                    AppState.filters.allowed = res.allowedFilters || AppState.filters.allowed;
+                    AppState.filters.groups  = [{}];
+                    FilterManager.init();
+                    AppState.applyFilters();
+
+                    // 데이터 소스 배지 업데이트
+                    const srcBadge = document.getElementById('dataSourceBadge');
+                    if (srcBadge) {
+                        srcBadge.textContent = `${month} 기준`;
+                        srcBadge.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    Utils.showToast(e.message || '데이터 로드 실패', 'error');
+                } finally {
+                    LoadingManager.hide();
+                    sel.disabled = false;
+                }
+            },
+
+            // 최신 마스터로 복귀
+            resetToMaster() {
+                const badge    = document.getElementById('monthBadge');
+                const resetBtn = document.getElementById('resetToMasterBtn');
+                const sel      = document.getElementById('monthSelector');
+
+                badge.classList.add('hidden');
+                resetBtn.classList.add('hidden');
+                sel.value = '';
+
+                if (this._masterData) {
+                    AppState.data.raw     = [...this._masterData.raw];
+                    AppState.data.columns = [...this._masterData.columns];
+                    this._masterData = null;
+                    AppState.filters.groups = [{}];
+                    FilterManager.init();
+                    AppState.applyFilters();
+
+                    const srcBadge = document.getElementById('dataSourceBadge');
+                    if (srcBadge) srcBadge.classList.add('hidden');
+                }
+            }
+        };
+
         const AppController = {
             async init() {
                 try {
@@ -2812,6 +2984,7 @@
                     TableRenderer.renderHeaders();
                     FilterManager.init();
                     AppState.applyFilters();
+                    DashboardController.initMonthSelector();
 
                     if (!AppState.user.isAdmin) {
                         this.goStep(2);

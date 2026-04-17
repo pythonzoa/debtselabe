@@ -40,7 +40,7 @@ class AppError {
 function doGet() {
   return HtmlService.createTemplateFromFile('Index')
       .evaluate()
-      .setTitle('항공기 금융 결산 시스템 (Enhanced)')
+      .setTitle('KE Treasury Dashboard')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -213,13 +213,13 @@ function validateData(data) {
     }
 
     // 만기 초과 잔액 (TO가 오늘 이전인데 잔액 > 0)
-    const balance = numVal(row['당월잔액'] ?? row['원화환산잔액']);
+    const balance = numVal(row['당월 잔액'] ?? row['당월잔액'] ?? row['원화환산잔액']);
     if (DATE_RE.test(toStr) && new Date(toStr) < today && !isNaN(balance) && balance > 0) {
       warnings.push({ row: rowNum, field: '잔액', message: `${label} 만기(${toStr}) 경과했으나 잔액 존재 (${balance.toLocaleString()})` });
     }
     // ── 금액 ──────────────────────────────────────────
     const krwBal    = numVal(row['원화환산잔액']);
-    const monthBal  = numVal(row['당월잔액']);
+    const monthBal  = numVal(row['당월 잔액'] ?? row['당월잔액']);
     const loanAmt   = numVal(row['차입금액']);
 
     if (row['원화환산잔액'] !== undefined && row['원화환산잔액'] !== '') {
@@ -258,12 +258,14 @@ function validateData(data) {
     }
 
     // 변동금리인데 기준금리 누락 (숫자든 텍스트든 값이 있으면 통과)
-    if (rateType.includes('변동') && (!row['기준금리'] || String(row['기준금리']).trim() === '')) {
-      warnings.push({ row: rowNum, field: '기준금리', message: `${label} 변동금리인데 기준금리 누락` });
+    if (rateType === '변동' || rateType.includes('변동')) {
+      if (!row['기준금리'] || String(row['기준금리']).trim() === '') {
+        warnings.push({ row: rowNum, field: '기준금리', message: `${label} 변동금리인데 기준금리 누락` });
+      }
     }
 
     // 적용율이 있는데 스프레드 누락 (고정금리 제외)
-    if (!isNaN(rate) && rate > 0 && !rateType.includes('고정') && (!row['스프레드'] || isNaN(spread))) {
+    if (!isNaN(rate) && rate > 0 && !(rateType === '고정' || rateType.includes('고정')) && (!row['스프레드'] || String(row['스프레드']).trim() === '')) {
       warnings.push({ row: rowNum, field: '스프레드', message: `${label} 적용율 있으나 스프레드 누락` });
     }
   });
@@ -745,6 +747,91 @@ function getHistoryData() {
       'HISTORY_LOAD_FAILED',
       { originalError: e.toString() }
     ).toJSON();
+  }
+}
+
+// ┌──────────────────────────────────────────────────┐
+// │  히스토리 기준월 조회                             │
+// └──────────────────────────────────────────────────┘
+
+/**
+ * 22_차입금History 시트의 기준월 목록 반환
+ */
+function getHistoryMonths() {
+  try {
+    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('22_차입금History');
+    if (!sheet) return { months: [] };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { months: [] };
+
+    // B열(2번째) 직접 읽기
+    const raw = sheet.getRange(2, 2, lastRow - 1, 1).getDisplayValues();
+    const months = [...new Set(
+      raw.flat().map(v => String(v).trim()).filter(v => /^\d{4}-\d{2}$/.test(v))
+    )].sort();
+
+    Logger.log('getHistoryMonths: ' + months.length + '개 - ' + months.join(', '));
+    return { months };
+  } catch (e) {
+    Logger.log('getHistoryMonths error: ' + e.toString());
+    return { months: [] };
+  }
+}
+
+/**
+ * 특정 기준월의 히스토리 데이터를 마스터 포맷으로 반환
+ */
+function getHistoryByMonth(month) {
+  try {
+    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('22_차입금History');
+    if (!sheet) throw new AppError("'22_차입금History' 시트를 찾을 수 없습니다.", 'SHEET_NOT_FOUND', {});
+
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 2) return { columns: [], data: [], month };
+
+    const rawData = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+    const headers = rawData[0].map(h => String(h).trim());
+    const monthColIdx = 1; // B열 고정 (0-based)
+
+    const cleanData = [];
+    for (let i = 1; i < rawData.length; i++) {
+      const row = rawData[i];
+      if (String(row[monthColIdx]).trim() !== String(month).trim()) continue;
+      const dealIdx = headers.indexOf('DEAL');
+      if (dealIdx === -1 || !row[dealIdx] || String(row[dealIdx]).trim() === '') continue;
+
+      const obj = {};
+      headers.forEach((h, j) => {
+        if (!h || j === monthColIdx) return;
+        obj[h] = String(row[j] || '').trim();
+      });
+      cleanData.push(obj);
+    }
+
+    const validColumns = headers.filter((h, j) => h && j !== monthColIdx);
+    const conf = getAppConfig();
+
+    logActivity('getHistoryByMonth', { month, rows: cleanData.length });
+
+    return {
+      columns: validColumns,
+      data: cleanData,
+      hasMore: false,
+      totalRows: cleanData.length,
+      lastUpdate: `${month} 기준`,
+      allowedFilters: conf.allowedFilters,
+      validation: { errors: [], warnings: [], isValid: true, summary: { totalRows: cleanData.length, errorCount: 0, warningCount: 0 } },
+      dataSource: 'history',
+      month
+    };
+  } catch (e) {
+    if (e instanceof AppError) return e.toJSON();
+    Logger.log('getHistoryByMonth error: ' + e.toString());
+    return new AppError('히스토리 데이터 로드 실패: ' + e.message, 'HISTORY_FAILED', {}).toJSON();
   }
 }
 
